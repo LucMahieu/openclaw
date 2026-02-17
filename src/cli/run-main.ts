@@ -112,13 +112,12 @@ export function shouldUseInteractiveCommandSelector(params: {
     return false;
   }
   const root = parseRootInvocation(params.argv);
-  const requestedViaCommand = root.primary === "interactive";
-  if (!root.hasInteractiveFlag && !requestedViaCommand) {
+  if (!root.hasInteractiveFlag) {
     return false;
   }
   // Keep -i as an explicit interactive entrypoint only for root invocations.
   // If a real command is already present, run it normally and ignore -i.
-  if (root.primary && root.primary !== "interactive") {
+  if (root.primary) {
     return false;
   }
   if (!params.stdinIsTTY || !params.stdoutIsTTY) {
@@ -162,9 +161,6 @@ export function stripInteractiveSelectorArgs(argv: string[]): string[] {
       }
       if (!arg.startsWith("-")) {
         sawPrimary = true;
-        if (arg === "interactive") {
-          continue;
-        }
       }
     }
     next.push(arg);
@@ -246,8 +242,19 @@ export async function runCli(argv: string[] = process.argv) {
   if (useInteractiveSelector) {
     const { runInteractiveCommandSelector } = await import("./program/command-selector.js");
     const selectedPath = await runInteractiveCommandSelector(program);
-    if (selectedPath && selectedPath.length > 0) {
-      parseArgv = [...parseArgv, ...selectedPath];
+    if (!selectedPath || selectedPath.length === 0) {
+      // Exit silently when leaving interactive mode.
+      return;
+    }
+
+    parseArgv = [...parseArgv, ...selectedPath];
+    const { runCommandQuestionnaire } = await import("./program/command-questionnaire.js");
+    const promptArgs = await runCommandQuestionnaire({ program, commandPath: selectedPath });
+    if (promptArgs === null) {
+      return;
+    }
+    if (promptArgs.length > 0) {
+      parseArgv = [...parseArgv, ...promptArgs];
     }
   }
 

@@ -31,14 +31,8 @@ function isHiddenCommand(command: Command): boolean {
   return Boolean((command as Command & { _hidden?: boolean })._hidden);
 }
 
-function shouldSkipCommand(command: Command, parentDepth: number): boolean {
-  if (isHiddenCommand(command) || command.name() === "help") {
-    return true;
-  }
-  if (parentDepth === 0 && command.name() === "interactive") {
-    return true;
-  }
-  return false;
+function shouldSkipCommand(command: Command, _parentDepth: number): boolean {
+  return isHiddenCommand(command) || command.name() === "help";
 }
 
 function resolveCommandDescription(command: Command): string {

@@ -116,14 +116,24 @@ describe("shouldUseInteractiveCommandSelector", () => {
     ).toBe(true);
   });
 
-  it("enables selector for interactive command", () => {
+  it("enables selector for --interactive", () => {
+    expect(
+      shouldUseInteractiveCommandSelector({
+        argv: ["node", "openclaw", "--interactive"],
+        stdinIsTTY: true,
+        stdoutIsTTY: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not enable selector for interactive command name", () => {
     expect(
       shouldUseInteractiveCommandSelector({
         argv: ["node", "openclaw", "interactive"],
         stdinIsTTY: true,
         stdoutIsTTY: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("keeps default no-arg invocation on fast help path", () => {
@@ -164,7 +174,7 @@ describe("shouldUseInteractiveCommandSelector", () => {
     ).toBe(false);
     expect(
       shouldUseInteractiveCommandSelector({
-        argv: ["node", "openclaw", "interactive"],
+        argv: ["node", "openclaw", "--interactive"],
         stdinIsTTY: true,
         stdoutIsTTY: true,
         disableSelectorEnv: "1",
@@ -188,10 +198,11 @@ describe("stripInteractiveSelectorArgs", () => {
     expect(stripInteractiveSelectorArgs(["node", "openclaw", "-i"])).toEqual(["node", "openclaw"]);
   });
 
-  it("removes interactive command from root invocations", () => {
+  it("keeps non-flag command arguments unchanged", () => {
     expect(stripInteractiveSelectorArgs(["node", "openclaw", "interactive"])).toEqual([
       "node",
       "openclaw",
+      "interactive",
     ]);
   });
 
