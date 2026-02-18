@@ -5,7 +5,7 @@ import type {
   StringSelectMenuInteraction,
 } from "@buape/carbon";
 import type { Client } from "@buape/carbon";
-import type { GatewayPresenceUpdate } from "discord-api-types/v10";
+import { InteractionResponseType, Routes, type GatewayPresenceUpdate } from "discord-api-types/v10";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { DiscordAccountConfig } from "../../config/types.discord.js";
@@ -310,6 +310,37 @@ describe("discord component interactions", () => {
     expect(dispatchReplyMock).toHaveBeenCalledTimes(1);
     expect(deliverDiscordReplyMock).toHaveBeenCalledTimes(1);
     expect(deliverDiscordReplyMock.mock.calls[0]?.[0]?.replyToId).toBe("msg-1");
+    expect(resolveDiscordComponentEntry({ id: "btn_1" })).toBeNull();
+  });
+
+  it("launches activities for launch-activity buttons", async () => {
+    registerDiscordComponentEntries({
+      entries: [createButtonEntry({ action: "launch-activity" })],
+      modals: [],
+    });
+
+    const restPost = vi.fn().mockResolvedValue(undefined);
+    const button = createDiscordComponentButton(createComponentContext());
+    const { interaction, defer, reply } = createComponentButtonInteraction({
+      rawData: {
+        channel_id: "dm-channel",
+        id: "interaction-1",
+        token: "token-123",
+      } as ButtonInteraction["rawData"],
+      client: { rest: { post: restPost } },
+    });
+
+    await button.run(interaction, { cid: "btn_1" } as ComponentData);
+
+    expect(restPost).toHaveBeenCalledTimes(1);
+    expect(restPost).toHaveBeenCalledWith(
+      Routes.interactionCallback("interaction-1", "token-123"),
+      { body: { type: InteractionResponseType.LaunchActivity } },
+    );
+    expect(defer).not.toHaveBeenCalled();
+    expect(reply).not.toHaveBeenCalled();
+    expect(dispatchReplyMock).not.toHaveBeenCalled();
+    expect(deliverDiscordReplyMock).not.toHaveBeenCalled();
     expect(resolveDiscordComponentEntry({ id: "btn_1" })).toBeNull();
   });
 

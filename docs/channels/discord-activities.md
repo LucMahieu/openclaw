@@ -81,7 +81,6 @@ When the button is pressed, OpenClaw responds with the `LAUNCH_ACTIVITY` interac
 ## Notes
 
 - The bundled A2UI page renders in Discord, but the node action bridge is not available in the Discord client. If you need Activity user actions to reach the Gateway, add a browser bridge to post actions back to the Gateway.
-- The activity token is shared with anyone who can open the Activity URL. Omit the token only if you want fully public A2UI access.
 
 Related:
 
