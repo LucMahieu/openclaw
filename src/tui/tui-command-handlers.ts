@@ -464,13 +464,6 @@ export function createCommandHandlers(context: CommandHandlerContext) {
 
   const sendMessage = async (text: string) => {
     try {
-      // Auto-interrupt: if there's already an active run, abort it first
-      if (state.activeChatRunId) {
-        await abortActive();
-        // Brief pause to let abort complete
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
       chatLog.addUser(text);
       tui.requestRender();
       const runId = randomUUID();
