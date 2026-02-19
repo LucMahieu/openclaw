@@ -7,6 +7,7 @@ import {
   normalizeVerb,
   resolveActionSpec,
   resolveDetailFromKeys,
+  resolveExecBarStatus,
   resolveExecDetail,
   resolveReadDetail,
   resolveWebFetchDetail,
@@ -150,4 +151,39 @@ export function formatToolSummary(display: ToolDisplay): string {
   return detail
     ? `${display.emoji} ${display.label}: ${detail}`
     : `${display.emoji} ${display.label}`;
+}
+
+/**
+ * Short status for CUA-style tool bar: bullet + one-line status.
+ * Used by TUI ToolExecutionComponent.
+ */
+export function resolveToolBarStatus(params: {
+  name?: string;
+  args?: unknown;
+  isPartial?: boolean;
+  isError?: boolean;
+}): string {
+  const name = normalizeToolName(params.name);
+  const key = name.toLowerCase();
+  const isPartial = params.isPartial === true;
+  const _isError = params.isError === true;
+
+  if (key === "exec") {
+    return resolveExecBarStatus(params.args, isPartial);
+  }
+  if (key === "read") {
+    return "Read";
+  }
+  if (key === "write") {
+    return "Write";
+  }
+  if (key === "edit") {
+    return "Edit";
+  }
+  if (key === "attach") {
+    return "Attach";
+  }
+
+  const display = resolveToolDisplay({ name: params.name, args: params.args });
+  return display.label;
 }

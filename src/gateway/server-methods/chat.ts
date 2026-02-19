@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { CURRENT_SESSION_VERSION, SessionManager } from "@mariozechner/pi-coding-agent";
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { resolveThinkingDefault } from "../../agents/model-selection.js";
+import { repairToolUseResultPairing } from "../../agents/session-transcript-repair.js";
 import { resolveAgentTimeoutMs } from "../../agents/timeout.js";
 import { dispatchInboundMessage } from "../../auto-reply/dispatch.js";
 import { createReplyDispatcher } from "../../auto-reply/reply/reply-dispatcher.js";
@@ -589,10 +591,11 @@ export const chatHandlers: GatewayRequestHandlers = {
     const sliced = rawMessages.length > max ? rawMessages.slice(-max) : rawMessages;
     const sanitized = stripEnvelopeFromMessages(sliced);
     const normalized = sanitizeChatHistoryMessages(sanitized);
+    const repaired = repairToolUseResultPairing(normalized as AgentMessage[]).messages;
     const maxHistoryBytes = getMaxChatHistoryMessagesBytes();
     const perMessageHardCap = Math.min(CHAT_HISTORY_MAX_SINGLE_MESSAGE_BYTES, maxHistoryBytes);
     const replaced = replaceOversizedChatHistoryMessages({
-      messages: normalized,
+      messages: repaired,
       maxSingleMessageBytes: perMessageHardCap,
     });
     const capped = capArrayByJsonBytes(replaced.messages, maxHistoryBytes).items;

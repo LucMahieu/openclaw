@@ -896,6 +896,171 @@ export function resolveExecDetail(args: unknown): string | undefined {
   return cwd ? `${summary} (in ${cwd})` : summary;
 }
 
+/**
+ * Short label for exec tool bar (CUA-style). Returns command-specific labels
+ * in sentence case, e.g. "Listed directory", "Searched with grep".
+ */
+export function resolveExecBarStatus(args: unknown, isPartial: boolean): string {
+  const record = asRecord(args);
+  const raw = record && typeof record.command === "string" ? record.command.trim() : undefined;
+  if (!raw) {
+    return isPartial ? "Running command" : "Ran command";
+  }
+
+  const unwrapped = unwrapShellWrapper(raw);
+  const stage = firstTopLevelStage(stripShellPreamble(unwrapped)).trim();
+  const words = stage
+    ? trimLeadingEnv(splitShellWords(stage))
+    : trimLeadingEnv(splitShellWords(unwrapped));
+  if (words.length === 0) {
+    return isPartial ? "Running command" : "Ran command";
+  }
+
+  const bin = binaryName(words[0]) ?? "command";
+  const running = isPartial;
+  const past = (a: string, b: string) => (running ? a : b);
+
+  if (bin === "ls") {
+    return past("Listing directory", "Listed directory");
+  }
+  if (bin === "grep" || bin === "rg" || bin === "ripgrep") {
+    return past("Searching with grep", "Searched with grep");
+  }
+  if (bin === "find") {
+    return past("Finding files", "Found files");
+  }
+  if (bin === "cat") {
+    return past("Showing file", "Showed file");
+  }
+  if (bin === "head" || bin === "tail") {
+    return past("Showing lines", "Showed lines");
+  }
+  if (bin === "rm") {
+    return past("Removing files", "Removed files");
+  }
+  if (bin === "cp") {
+    return past("Copying files", "Copied files");
+  }
+  if (bin === "mv") {
+    return past("Moving files", "Moved files");
+  }
+  if (bin === "mkdir") {
+    return past("Creating folder", "Created folder");
+  }
+  if (bin === "touch") {
+    return past("Creating file", "Created file");
+  }
+  if (bin === "curl" || bin === "wget") {
+    return past("Fetching URL", "Fetched URL");
+  }
+  if (bin === "sed") {
+    return past("Running sed", "Ran sed");
+  }
+  if (bin === "printf" || bin === "echo") {
+    return past("Printing text", "Printed text");
+  }
+
+  if (bin === "git") {
+    const gitOptsWithValue = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace"]);
+    let sub: string | undefined;
+    for (let i = 1; i < words.length; i += 1) {
+      const token = words[i];
+      if (!token) {
+        continue;
+      }
+      if (token === "--") {
+        sub = firstPositional(words, i + 1);
+        break;
+      }
+      if (token.startsWith("-")) {
+        if (gitOptsWithValue.has(token)) {
+          i += 1;
+        }
+        continue;
+      }
+      sub = token;
+      break;
+    }
+    const gitMap: Record<string, [string, string]> = {
+      status: ["Checking git status", "Checked git status"],
+      diff: ["Checking git diff", "Checked git diff"],
+      log: ["Viewing git history", "Viewed git history"],
+      show: ["Showing git object", "Showed git object"],
+      branch: ["Listing git branches", "Listed git branches"],
+      checkout: ["Switching git branch", "Switched git branch"],
+      switch: ["Switching git branch", "Switched git branch"],
+      commit: ["Creating git commit", "Created git commit"],
+      push: ["Pushing git changes", "Pushed git changes"],
+      pull: ["Pulling git changes", "Pulled git changes"],
+      fetch: ["Fetching git changes", "Fetched git changes"],
+      merge: ["Merging git changes", "Merged git changes"],
+      rebase: ["Rebasing git branch", "Rebased git branch"],
+      add: ["Staging git changes", "Staged git changes"],
+      restore: ["Restoring git files", "Restored git files"],
+      reset: ["Resetting git state", "Reset git state"],
+      stash: ["Stashing git changes", "Stashed git changes"],
+    };
+    if (sub && gitMap[sub]) {
+      const [r, d] = gitMap[sub];
+      return running ? r : d;
+    }
+    return past("Running git command", "Ran git command");
+  }
+
+  if (bin === "npm" || bin === "pnpm" || bin === "yarn" || bin === "bun") {
+    const positional = positionalArgs(words, 1, ["--prefix", "-C", "--cwd", "--config"]);
+    const sub = positional[0] ?? "command";
+    const script = positional[1];
+    if (sub === "run" && script) {
+      const scriptMap: Record<string, [string, string]> = {
+        build: ["Running build", "Ran build"],
+        test: ["Running tests", "Ran tests"],
+        start: ["Starting app", "Started app"],
+        lint: ["Running lint", "Ran lint"],
+      };
+      if (scriptMap[script]) {
+        const [r, d] = scriptMap[script];
+        return running ? r : d;
+      }
+      return past(`Running ${script}`, `Ran ${script}`);
+    }
+    const pkgMap: Record<string, [string, string]> = {
+      install: ["Installing dependencies", "Installed dependencies"],
+      test: ["Running tests", "Ran tests"],
+      build: ["Running build", "Ran build"],
+      start: ["Starting app", "Started app"],
+      lint: ["Running lint", "Ran lint"],
+      run: ["Running script", "Ran script"],
+    };
+    if (pkgMap[sub]) {
+      const [r, d] = pkgMap[sub];
+      return running ? r : d;
+    }
+    return past(`Running ${bin} ${sub}`, `Ran ${bin} ${sub}`);
+  }
+
+  if (bin === "node" || bin === "python" || bin === "python3" || bin === "ruby" || bin === "php") {
+    const hasHeredoc = words.some((t) => t.startsWith("<<"));
+    if (hasHeredoc) {
+      return past("Running inline script", "Ran inline script");
+    }
+    const script = firstPositional(words, 1, ["-e", "-c", "--eval", "-m"]);
+    if (script) {
+      return past(`Running ${bin} script`, `Ran ${bin} script`);
+    }
+    return past(`Running ${bin}`, `Ran ${bin}`);
+  }
+
+  if (bin === "openclaw") {
+    const sub = firstPositional(words, 1);
+    return sub
+      ? past(`Running openclaw ${sub}`, `Ran openclaw ${sub}`)
+      : past("Running openclaw", "Ran openclaw");
+  }
+
+  return past("Running command", "Ran command");
+}
+
 export function resolveActionSpec(
   spec: ToolDisplaySpec | undefined,
   action: string | undefined,

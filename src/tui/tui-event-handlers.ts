@@ -25,7 +25,7 @@ type EventHandlerContext = {
   state: TuiStateAccess;
   setActivityStatus: (text: string) => void;
   refreshSessionInfo?: () => Promise<void>;
-  loadHistory?: () => Promise<void>;
+  loadHistory?: (opts?: { appendOnly?: boolean }) => Promise<void>;
   isLocalRunId?: (runId: string) => boolean;
   forgetLocalRunId?: (runId: string) => void;
   clearLocalRunIds?: () => void;
@@ -116,7 +116,7 @@ export function createEventHandlers(context: EventHandlerContext) {
     if (hasConcurrentActiveRun(runId)) {
       return;
     }
-    void loadHistory?.();
+    void loadHistory?.({ appendOnly: true });
   };
 
   const handleChatEvent = (payload: unknown) => {

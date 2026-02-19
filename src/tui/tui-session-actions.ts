@@ -293,7 +293,10 @@ export function createSessionActions(context: SessionActionContext) {
     applySessionInfo({ entry, force: true });
   };
 
-  const loadHistory = async () => {
+  let lastLoadedMessageCount = 0;
+
+  const loadHistory = async (optsLoad?: { appendOnly?: boolean }) => {
+    const appendOnly = optsLoad?.appendOnly === true && state.historyLoaded;
     try {
       const history = await client.loadHistory({
         sessionKey: state.currentSessionKey,
@@ -309,9 +312,16 @@ export function createSessionActions(context: SessionActionContext) {
       state.sessionInfo.thinkingLevel = record.thinkingLevel ?? state.sessionInfo.thinkingLevel;
       state.sessionInfo.verboseLevel = record.verboseLevel ?? state.sessionInfo.verboseLevel;
       const showTools = (state.sessionInfo.verboseLevel ?? "off") !== "off";
-      chatLog.clearAll();
-      chatLog.addSystem(`session ${state.currentSessionKey}`);
-      for (const entry of record.messages ?? []) {
+      const messages = record.messages ?? [];
+      const mustReplace = !appendOnly || messages.length < lastLoadedMessageCount;
+      if (mustReplace) {
+        chatLog.clearAll();
+        chatLog.addSystem(`session ${state.currentSessionKey}`);
+      }
+      const startIdx = mustReplace ? 0 : lastLoadedMessageCount;
+      const toolResultByCallId = new Map<string, Record<string, unknown>>();
+      for (let i = startIdx; i < messages.length; i++) {
+        const entry = messages[i];
         if (!entry || typeof entry !== "object") {
           continue;
         }
@@ -331,11 +341,108 @@ export function createSessionActions(context: SessionActionContext) {
           continue;
         }
         if (message.role === "assistant") {
-          const text = extractTextFromMessage(message, {
-            includeThinking: state.showThinking,
-          });
-          if (text) {
-            chatLog.finalizeAssistant(text);
+          toolResultByCallId.clear();
+          for (let j = i + 1; j < messages.length; j++) {
+            const next = messages[j] as Record<string, unknown> | undefined;
+            if (!next || next.role !== "toolResult") {
+              break;
+            }
+            const id = asString(next.toolCallId ?? next.toolUseId, "");
+            if (id) {
+              toolResultByCallId.set(id, next);
+            }
+          }
+          const content = message.content;
+          const hasToolUseBlocks =
+            Array.isArray(content) &&
+            content.some(
+              (b) =>
+                b &&
+                typeof b === "object" &&
+                ["tool_use", "toolcall", "tool_call"].includes(
+                  typeof (b as Record<string, unknown>).type === "string"
+                    ? (b as Record<string, unknown>).type.toLowerCase()
+                    : "",
+                ),
+            );
+          if (hasToolUseBlocks && Array.isArray(content)) {
+            for (const block of content) {
+              if (!block || typeof block !== "object") {
+                continue;
+              }
+              const rec = block as Record<string, unknown>;
+              const blockType = typeof rec.type === "string" ? rec.type.toLowerCase() : "";
+              if (blockType === "text" && typeof rec.text === "string") {
+                const text = String(rec.text).trim();
+                if (text) {
+                  chatLog.finalizeAssistant(text);
+                }
+                continue;
+              }
+              if (blockType === "thinking" && (state.showThinking ?? false)) {
+                const t = typeof rec.thinking === "string" ? rec.thinking.trim() : "";
+                if (t) {
+                  chatLog.finalizeAssistant(`[thinking]\n${t}`);
+                }
+                continue;
+              }
+              if (["tool_use", "toolcall", "tool_call"].includes(blockType)) {
+                if (!showTools) {
+                  continue;
+                }
+                const toolCallId = asString(rec.id ?? rec.toolCallId ?? rec.tool_use_id, "");
+                const toolName = asString(rec.name ?? rec.toolName, "tool");
+                const args = rec.input ?? rec.args ?? {};
+                const component = chatLog.startTool(toolCallId, toolName, args);
+                const tr = toolResultByCallId.get(toolCallId);
+                if (tr) {
+                  component.setResult(
+                    {
+                      content: Array.isArray(tr.content)
+                        ? (tr.content as Record<string, unknown>[])
+                        : [],
+                      details:
+                        typeof tr.details === "object" && tr.details
+                          ? (tr.details as Record<string, unknown>)
+                          : undefined,
+                    },
+                    { isError: Boolean(tr.isError) },
+                  );
+                }
+              }
+            }
+          } else {
+            const text = extractTextFromMessage(message, {
+              includeThinking: state.showThinking,
+            });
+            if (text) {
+              chatLog.finalizeAssistant(text);
+            }
+            if (showTools) {
+              for (const tr of toolResultByCallId.values()) {
+                const toolCallId = asString(tr.toolCallId ?? tr.toolUseId, "");
+                const toolName = asString(tr.toolName ?? tr.tool_name, "tool");
+                const component = chatLog.startTool(toolCallId, toolName, {});
+                component.setResult(
+                  {
+                    content: Array.isArray(tr.content)
+                      ? (tr.content as Record<string, unknown>[])
+                      : [],
+                    details:
+                      typeof tr.details === "object" && tr.details
+                        ? (tr.details as Record<string, unknown>)
+                        : undefined,
+                  },
+                  { isError: Boolean(tr.isError) },
+                );
+              }
+            }
+          }
+          while (
+            i + 1 < messages.length &&
+            (messages[i + 1] as Record<string, unknown> | undefined)?.role === "toolResult"
+          ) {
+            i += 1;
           }
           continue;
         }
@@ -343,8 +450,8 @@ export function createSessionActions(context: SessionActionContext) {
           if (!showTools) {
             continue;
           }
-          const toolCallId = asString(message.toolCallId, "");
-          const toolName = asString(message.toolName, "tool");
+          const toolCallId = asString(message.toolCallId ?? message.toolUseId, "");
+          const toolName = asString(message.toolName ?? message.tool_name, "tool");
           const component = chatLog.startTool(toolCallId, toolName, {});
           component.setResult(
             {
@@ -360,6 +467,7 @@ export function createSessionActions(context: SessionActionContext) {
           );
         }
       }
+      lastLoadedMessageCount = messages.length;
       state.historyLoaded = true;
     } catch (err) {
       chatLog.addSystem(`history failed: ${String(err)}`);
