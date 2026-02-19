@@ -204,7 +204,7 @@ export function createEventHandlers(context: EventHandlerContext) {
     }
     if (evt.state === "aborted") {
       const wasActiveRun = state.activeChatRunId === evt.runId;
-      chatLog.addSystem("run aborted");
+      chatLog.addSystem("Interrupted agent.");
       streamAssembler.drop(evt.runId);
       sessionRuns.delete(evt.runId);
       clearActiveRunIfMatch(evt.runId);

@@ -234,11 +234,6 @@ export function createAgentEventHandler({
     }
     chatRunState.buffers.set(clientRunId, text);
     const now = Date.now();
-    const last = chatRunState.deltaSentAt.get(clientRunId) ?? 0;
-    if (now - last < 150) {
-      return;
-    }
-    chatRunState.deltaSentAt.set(clientRunId, now);
     const payload = {
       runId: clientRunId,
       sessionKey,

@@ -51,7 +51,7 @@ type TranscriptAppendResult = {
 };
 
 type AppendMessageArg = Parameters<SessionManager["appendMessage"]>[0];
-type AbortOrigin = "rpc" | "stop-command";
+type AbortOrigin = "rpc" | "stop-command" | "interrupt";
 
 type AbortedPartialSnapshot = {
   runId: string;
@@ -816,6 +816,15 @@ export const chatHandlers: GatewayRequestHandlers = {
       });
       return;
     }
+
+    // Interrupt: abort any active run for this session so the new message becomes the next turn
+    abortChatRunsForSessionKeyWithPartials({
+      context,
+      ops: createChatAbortOps(context),
+      sessionKey: rawSessionKey,
+      abortOrigin: "interrupt",
+      stopReason: "interrupt",
+    });
 
     try {
       const abortController = new AbortController();
