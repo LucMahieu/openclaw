@@ -156,15 +156,6 @@ async function listAgentFileNames(agentId = "main") {
   return files.map((file) => file.name);
 }
 
-function expectNotFoundResponseAndNoWrite(respond: ReturnType<typeof vi.fn>) {
-  expect(respond).toHaveBeenCalledWith(
-    false,
-    undefined,
-    expect.objectContaining({ message: expect.stringContaining("not found") }),
-  );
-  expect(mocks.writeConfigFile).not.toHaveBeenCalled();
-}
-
 beforeEach(() => {
   mocks.fsReadFile.mockImplementation(async () => {
     throw createEnoentError();
@@ -328,7 +319,12 @@ describe("agents.update", () => {
     });
     await promise;
 
-    expectNotFoundResponseAndNoWrite(respond);
+    expect(respond).toHaveBeenCalledWith(
+      false,
+      undefined,
+      expect.objectContaining({ message: expect.stringContaining("not found") }),
+    );
+    expect(mocks.writeConfigFile).not.toHaveBeenCalled();
   });
 
   it("ensures workspace when workspace changes", async () => {
@@ -412,7 +408,12 @@ describe("agents.delete", () => {
     });
     await promise;
 
-    expectNotFoundResponseAndNoWrite(respond);
+    expect(respond).toHaveBeenCalledWith(
+      false,
+      undefined,
+      expect.objectContaining({ message: expect.stringContaining("not found") }),
+    );
+    expect(mocks.writeConfigFile).not.toHaveBeenCalled();
   });
 
   it("rejects invalid params (missing agentId)", async () => {

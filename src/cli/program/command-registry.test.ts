@@ -39,18 +39,6 @@ const testProgramContext: ProgramContext = {
 };
 
 describe("command-registry", () => {
-  const createProgram = () => new Command();
-
-  const withProcessArgv = async (argv: string[], run: () => Promise<void>) => {
-    const prevArgv = process.argv;
-    process.argv = argv;
-    try {
-      await run();
-    } finally {
-      process.argv = prevArgv;
-    }
-  };
-
   it("includes both agent and agents in core CLI command names", () => {
     const names = getCoreCliCommandNames();
     expect(names).toContain("agent");
@@ -58,7 +46,7 @@ describe("command-registry", () => {
   });
 
   it("registerCoreCliByName resolves agents to the agent entry", async () => {
-    const program = createProgram();
+    const program = new Command();
     const found = await registerCoreCliByName(program, testProgramContext, "agents");
     expect(found).toBe(true);
     const agentsCmd = program.commands.find((c) => c.name() === "agents");
@@ -69,20 +57,20 @@ describe("command-registry", () => {
   });
 
   it("registerCoreCliByName returns false for unknown commands", async () => {
-    const program = createProgram();
+    const program = new Command();
     const found = await registerCoreCliByName(program, testProgramContext, "nonexistent");
     expect(found).toBe(false);
   });
 
   it("registers doctor placeholder for doctor primary command", () => {
-    const program = createProgram();
+    const program = new Command();
     registerCoreCliCommands(program, testProgramContext, ["node", "openclaw", "doctor"]);
 
     expect(program.commands.map((command) => command.name())).toEqual(["doctor"]);
   });
 
   it("treats maintenance commands as top-level builtins", async () => {
-    const program = createProgram();
+    const program = new Command();
 
     expect(await registerCoreCliByName(program, testProgramContext, "doctor")).toBe(true);
 
@@ -95,12 +83,17 @@ describe("command-registry", () => {
   });
 
   it("registers grouped core entry placeholders without duplicate command errors", async () => {
-    const program = createProgram();
+    const program = new Command();
     registerCoreCliCommands(program, testProgramContext, ["node", "openclaw", "vitest"]);
-    program.exitOverride();
-    await withProcessArgv(["node", "openclaw", "status"], async () => {
+
+    const prevArgv = process.argv;
+    process.argv = ["node", "openclaw", "status"];
+    try {
+      program.exitOverride();
       await program.parseAsync(["node", "openclaw", "status"]);
-    });
+    } finally {
+      process.argv = prevArgv;
+    }
 
     const names = program.commands.map((command) => command.name());
     expect(names).toContain("status");

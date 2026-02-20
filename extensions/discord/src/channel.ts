@@ -110,8 +110,6 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
         .map((entry) => String(entry).trim())
         .filter(Boolean)
         .map((entry) => entry.toLowerCase()),
-    resolveDefaultTo: ({ cfg, accountId }) =>
-      resolveDiscordAccount({ cfg, accountId }).config.defaultTo?.trim() || undefined,
   },
   security: {
     resolveDmPolicy: ({ cfg, accountId, account }) => {

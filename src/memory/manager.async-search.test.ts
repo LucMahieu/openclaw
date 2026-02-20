@@ -3,9 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
-import type { MemoryIndexManager } from "./index.js";
+import { getMemorySearchManager, type MemoryIndexManager } from "./index.js";
 import { createOpenAIEmbeddingProviderMock } from "./test-embeddings-mock.js";
-import { createMemoryManagerOrThrow } from "./test-manager.js";
 
 const embedBatch = vi.fn(async () => []);
 const embedQuery = vi.fn(async () => [0.2, 0.2, 0.2]);
@@ -57,7 +56,12 @@ describe("memory search async sync", () => {
       },
     } as OpenClawConfig;
 
-    manager = await createMemoryManagerOrThrow(cfg);
+    const result = await getMemorySearchManager({ cfg, agentId: "main" });
+    expect(result.manager).not.toBeNull();
+    if (!result.manager) {
+      throw new Error("manager missing");
+    }
+    manager = result.manager as unknown as MemoryIndexManager;
 
     const pending = new Promise<void>(() => {});
     const syncMock = vi.fn(async () => pending);

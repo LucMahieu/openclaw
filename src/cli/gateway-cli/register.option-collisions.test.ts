@@ -1,6 +1,5 @@
 import { Command } from "commander";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { runRegisteredCli } from "../../test-utils/command-runner.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createCliRuntimeCapture } from "../test-runtime-capture.js";
 
 const callGatewayCli = vi.fn(async (_method: string, _opts: unknown, _params?: unknown) => ({
@@ -112,12 +111,6 @@ vi.mock("./discover.js", () => ({
 }));
 
 describe("gateway register option collisions", () => {
-  let registerGatewayCli: typeof import("./register.js").registerGatewayCli;
-
-  beforeAll(async () => {
-    ({ registerGatewayCli } = await import("./register.js"));
-  });
-
   beforeEach(() => {
     resetRuntimeCapture();
     callGatewayCli.mockClear();
@@ -125,9 +118,12 @@ describe("gateway register option collisions", () => {
   });
 
   it("forwards --token to gateway call when parent and child option names collide", async () => {
-    await runRegisteredCli({
-      register: registerGatewayCli as (program: Command) => void,
-      argv: ["gateway", "call", "health", "--token", "tok_call", "--json"],
+    const { registerGatewayCli } = await import("./register.js");
+    const program = new Command();
+    registerGatewayCli(program);
+
+    await program.parseAsync(["gateway", "call", "health", "--token", "tok_call", "--json"], {
+      from: "user",
     });
 
     expect(callGatewayCli).toHaveBeenCalledWith(
@@ -140,9 +136,12 @@ describe("gateway register option collisions", () => {
   });
 
   it("forwards --token to gateway probe when parent and child option names collide", async () => {
-    await runRegisteredCli({
-      register: registerGatewayCli as (program: Command) => void,
-      argv: ["gateway", "probe", "--token", "tok_probe", "--json"],
+    const { registerGatewayCli } = await import("./register.js");
+    const program = new Command();
+    registerGatewayCli(program);
+
+    await program.parseAsync(["gateway", "probe", "--token", "tok_probe", "--json"], {
+      from: "user",
     });
 
     expect(gatewayStatusCommand).toHaveBeenCalledWith(

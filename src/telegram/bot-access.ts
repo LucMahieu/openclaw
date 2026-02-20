@@ -1,4 +1,3 @@
-import { firstDefined, isSenderIdAllowed, mergeAllowFromSources } from "../channels/allow-from.js";
 import type { AllowlistMatch } from "../channels/allowlist-match.js";
 
 export type NormalizedAllowFrom = {
@@ -54,7 +53,21 @@ export const normalizeAllowFrom = (list?: Array<string | number>): NormalizedAll
 export const normalizeAllowFromWithStore = (params: {
   allowFrom?: Array<string | number>;
   storeAllowFrom?: string[];
-}): NormalizedAllowFrom => normalizeAllowFrom(mergeAllowFromSources(params));
+}): NormalizedAllowFrom => {
+  const combined = [...(params.allowFrom ?? []), ...(params.storeAllowFrom ?? [])]
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+  return normalizeAllowFrom(combined);
+};
+
+export const firstDefined = <T>(...values: Array<T | undefined>) => {
+  for (const value of values) {
+    if (typeof value !== "undefined") {
+      return value;
+    }
+  }
+  return undefined;
+};
 
 export const isSenderAllowed = (params: {
   allow: NormalizedAllowFrom;
@@ -62,10 +75,17 @@ export const isSenderAllowed = (params: {
   senderUsername?: string;
 }) => {
   const { allow, senderId } = params;
-  return isSenderIdAllowed(allow, senderId, true);
+  if (!allow.hasEntries) {
+    return true;
+  }
+  if (allow.hasWildcard) {
+    return true;
+  }
+  if (senderId && allow.entries.includes(senderId)) {
+    return true;
+  }
+  return false;
 };
-
-export { firstDefined };
 
 export const resolveSenderAllowMatch = (params: {
   allow: NormalizedAllowFrom;

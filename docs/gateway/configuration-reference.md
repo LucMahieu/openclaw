@@ -216,19 +216,6 @@ WhatsApp runs through the gateway's web channel (Baileys Web). It starts automat
           accentColor: "#5865F2",
         },
       },
-      voice: {
-        enabled: true,
-        autoJoin: [
-          {
-            guildId: "123456789012345678",
-            channelId: "234567890123456789",
-          },
-        ],
-        tts: {
-          provider: "openai",
-          openai: { voice: "alloy" },
-        },
-      },
       retry: {
         attempts: 3,
         minDelayMs: 500,
@@ -246,7 +233,6 @@ WhatsApp runs through the gateway's web channel (Baileys Web). It starts automat
 - Bot-authored messages are ignored by default. `allowBots: true` enables them (own messages still filtered).
 - `maxLinesPerMessage` (default 17) splits tall messages even when under 2000 chars.
 - `channels.discord.ui.components.accentColor` sets the accent color for Discord components v2 containers.
-- `channels.discord.voice` enables Discord voice channel conversations and optional auto-join + TTS overrides.
 
 **Reaction notification modes:** `off` (none), `own` (bot's messages, default), `all` (all messages), `allowlist` (from `guilds.<id>.users` on all messages).
 
@@ -408,8 +394,6 @@ OpenClaw spawns `imsg rpc` (JSON-RPC over stdio). No daemon or port required.
       allowFrom: ["+15555550123", "user@example.com", "chat_id:123"],
       historyLimit: 50,
       includeAttachments: false,
-      attachmentRoots: ["/Users/*/Library/Messages/Attachments"],
-      remoteAttachmentRoots: ["/Users/*/Library/Messages/Attachments"],
       mediaMaxMb: 16,
       service: "auto",
       region: "US",
@@ -421,7 +405,6 @@ OpenClaw spawns `imsg rpc` (JSON-RPC over stdio). No daemon or port required.
 - Requires Full Disk Access to the Messages DB.
 - Prefer `chat_id:<id>` targets. Use `imsg chats --limit 20` to list chats.
 - `cliPath` can point to an SSH wrapper; set `remoteHost` (`host` or `user@host`) for SCP attachment fetching.
-- `attachmentRoots` and `remoteAttachmentRoots` restrict inbound attachment paths (default: `/Users/*/Library/Messages/Attachments`).
 - SCP uses strict host-key checking, so ensure the relay host key already exists in `~/.ssh/known_hosts`.
 
 <Accordion title="iMessage SSH wrapper example">
@@ -2183,8 +2166,7 @@ Auth: `Authorization: Bearer <token>` or `x-openclaw-token: <token>`.
   - `http://<gateway-host>:<gateway.port>/__openclaw__/a2ui/`
 - Local-only: keep `gateway.bind: "loopback"` (default).
 - Non-loopback binds: canvas routes require Gateway auth (token/password/trusted-proxy), same as other Gateway HTTP surfaces.
-- Node WebViews typically don't send auth headers; after a node is paired and connected, the Gateway advertises node-scoped capability URLs for canvas/A2UI access.
-- Capability URLs are bound to the active node WS session and expire quickly. IP-based fallback is not used.
+- Node WebViews typically don't send auth headers; after a node is paired and connected, the Gateway allows a private-IP fallback so the node can load canvas/A2UI without leaking secrets into URLs.
 - Injects live-reload client into served HTML.
 - Auto-creates starter `index.html` when empty.
 - Also serves A2UI at `/__openclaw__/a2ui/`.

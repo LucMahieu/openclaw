@@ -36,10 +36,18 @@ describe("createEditorSubmitHandler", () => {
     expect(editor.addToHistory).toHaveBeenCalledWith("hi");
   });
 
-  it.each(["", "   "])("does not add blank submissions to history", (text) => {
+  it("does not add empty-string submissions to history", () => {
     const { editor, handler } = createSubmitHarness();
 
-    handler(text);
+    handler("");
+
+    expect(editor.addToHistory).not.toHaveBeenCalled();
+  });
+
+  it("does not add whitespace-only submissions to history", () => {
+    const { editor, handler } = createSubmitHarness();
+
+    handler("   ");
 
     expect(editor.addToHistory).not.toHaveBeenCalled();
   });
@@ -70,5 +78,13 @@ describe("createEditorSubmitHandler", () => {
     handler("!ls");
 
     expect(handleBangLine).toHaveBeenCalledWith("!ls");
+  });
+
+  it("treats a lone ! as a normal message", () => {
+    const { sendMessage, handler } = createSubmitHarness();
+
+    handler("!");
+
+    expect(sendMessage).toHaveBeenCalledWith("!");
   });
 });

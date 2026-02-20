@@ -28,13 +28,13 @@ export const createTestRegistry = (channels: TestChannelRegistration[] = []): Pl
   diagnostics: [],
 });
 
-export const createChannelTestPluginBase = (params: {
+export const createOutboundTestPlugin = (params: {
   id: ChannelId;
+  outbound: ChannelOutboundAdapter;
   label?: string;
   docsPath?: string;
   capabilities?: ChannelCapabilities;
-  config?: Partial<ChannelPlugin["config"]>;
-}): Pick<ChannelPlugin, "id" | "meta" | "capabilities" | "config"> => ({
+}): ChannelPlugin => ({
   id: params.id,
   meta: {
     id: params.id,
@@ -45,25 +45,8 @@ export const createChannelTestPluginBase = (params: {
   },
   capabilities: params.capabilities ?? { chatTypes: ["direct"] },
   config: {
-    listAccountIds: () => ["default"],
+    listAccountIds: () => [],
     resolveAccount: () => ({}),
-    ...params.config,
   },
-});
-
-export const createOutboundTestPlugin = (params: {
-  id: ChannelId;
-  outbound: ChannelOutboundAdapter;
-  label?: string;
-  docsPath?: string;
-  capabilities?: ChannelCapabilities;
-}): ChannelPlugin => ({
-  ...createChannelTestPluginBase({
-    id: params.id,
-    label: params.label,
-    docsPath: params.docsPath,
-    capabilities: params.capabilities,
-    config: { listAccountIds: () => [] },
-  }),
   outbound: params.outbound,
 });

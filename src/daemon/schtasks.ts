@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { parseCmdScriptCommandLine, quoteCmdScriptArg } from "./cmd-argv.js";
-import { assertNoCmdLineBreak, parseCmdSetAssignment, renderCmdSetAssignment } from "./cmd-set.js";
+import { splitArgsPreservingQuotes } from "./arg-split.js";
 import { resolveGatewayServiceDescription, resolveGatewayWindowsTaskName } from "./constants.js";
 import { formatLine, writeFormattedLines } from "./output.js";
 import { resolveGatewayStateDir } from "./paths.js";
@@ -36,9 +35,7 @@ export function resolveTaskScriptPath(env: GatewayServiceEnv): string {
   return path.join(stateDir, scriptName);
 }
 
-// `/TR` is parsed by schtasks itself, while the generated `gateway.cmd` line is parsed by cmd.exe.
-// Keep their quoting strategies separate so each parser gets the encoding it expects.
-function quoteSchtasksArg(value: string): string {
+function quoteCmdArg(value: string): string {
   if (!/[ \t"]/g.test(value)) {
     return value;
   }
@@ -60,6 +57,12 @@ function resolveTaskUser(env: GatewayServiceEnv): string | null {
   return username;
 }
 
+function parseCommandLine(value: string): string[] {
+  // `buildTaskScript` only escapes quotes (`\"`).
+  // Keep all other backslashes literal so drive and UNC paths are preserved.
+  return splitArgsPreservingQuotes(value, { escapeMode: "backslash-quote-only" });
+}
+
 export async function readScheduledTaskCommand(
   env: GatewayServiceEnv,
 ): Promise<GatewayServiceCommandConfig | null> {
@@ -74,21 +77,25 @@ export async function readScheduledTaskCommand(
       if (!line) {
         continue;
       }
-      const lower = line.toLowerCase();
       if (line.startsWith("@echo")) {
         continue;
       }
-      if (lower.startsWith("rem ")) {
+      if (line.toLowerCase().startsWith("rem ")) {
         continue;
       }
-      if (lower.startsWith("set ")) {
-        const assignment = parseCmdSetAssignment(line.slice(4));
-        if (assignment) {
-          environment[assignment.key] = assignment.value;
+      if (line.toLowerCase().startsWith("set ")) {
+        const assignment = line.slice(4).trim();
+        const index = assignment.indexOf("=");
+        if (index > 0) {
+          const key = assignment.slice(0, index).trim();
+          const value = assignment.slice(index + 1).trim();
+          if (key) {
+            environment[key] = value;
+          }
         }
         continue;
       }
-      if (lower.startsWith("cd /d ")) {
+      if (line.toLowerCase().startsWith("cd /d ")) {
         workingDirectory = line.slice("cd /d ".length).trim().replace(/^"|"$/g, "");
         continue;
       }
@@ -99,7 +106,7 @@ export async function readScheduledTaskCommand(
       return null;
     }
     return {
-      programArguments: parseCmdScriptCommandLine(commandLine),
+      programArguments: parseCommandLine(commandLine),
       ...(workingDirectory ? { workingDirectory } : {}),
       ...(Object.keys(environment).length > 0 ? { environment } : {}),
     };
@@ -139,23 +146,21 @@ function buildTaskScript({
   environment,
 }: GatewayServiceRenderArgs): string {
   const lines: string[] = ["@echo off"];
-  const trimmedDescription = description?.trim();
-  if (trimmedDescription) {
-    assertNoCmdLineBreak(trimmedDescription, "Task description");
-    lines.push(`rem ${trimmedDescription}`);
+  if (description?.trim()) {
+    lines.push(`rem ${description.trim()}`);
   }
   if (workingDirectory) {
-    lines.push(`cd /d ${quoteCmdScriptArg(workingDirectory)}`);
+    lines.push(`cd /d ${quoteCmdArg(workingDirectory)}`);
   }
   if (environment) {
     for (const [key, value] of Object.entries(environment)) {
       if (!value) {
         continue;
       }
-      lines.push(renderCmdSetAssignment(key, value));
+      lines.push(`set ${key}=${value}`);
     }
   }
-  const command = programArguments.map(quoteCmdScriptArg).join(" ");
+  const command = programArguments.map(quoteCmdArg).join(" ");
   lines.push(command);
   return `${lines.join("\r\n")}\r\n`;
 }
@@ -190,7 +195,7 @@ export async function installScheduledTask({
   await fs.writeFile(scriptPath, script, "utf8");
 
   const taskName = resolveTaskName(env);
-  const quotedScript = quoteSchtasksArg(scriptPath);
+  const quotedScript = quoteCmdArg(scriptPath);
   const baseArgs = [
     "/Create",
     "/F",

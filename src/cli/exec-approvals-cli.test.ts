@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createCliRuntimeCapture } from "./test-runtime-capture.js";
 
 const callGatewayFromCli = vi.fn(async (method: string, _opts: unknown, params?: unknown) => {
@@ -67,31 +67,27 @@ describe("exec approvals CLI", () => {
     return program;
   };
 
-  const runApprovalsCommand = async (args: string[]) => {
-    const program = createProgram();
-    await program.parseAsync(args, { from: "user" });
-  };
-
-  beforeEach(() => {
+  it("routes get command to local, gateway, and node modes", async () => {
     resetLocalSnapshot();
     resetRuntimeCapture();
     callGatewayFromCli.mockClear();
-  });
 
-  it("routes get command to local, gateway, and node modes", async () => {
-    await runApprovalsCommand(["approvals", "get"]);
+    const localProgram = createProgram();
+    await localProgram.parseAsync(["approvals", "get"], { from: "user" });
 
     expect(callGatewayFromCli).not.toHaveBeenCalled();
     expect(runtimeErrors).toHaveLength(0);
     callGatewayFromCli.mockClear();
 
-    await runApprovalsCommand(["approvals", "get", "--gateway"]);
+    const gatewayProgram = createProgram();
+    await gatewayProgram.parseAsync(["approvals", "get", "--gateway"], { from: "user" });
 
     expect(callGatewayFromCli).toHaveBeenCalledWith("exec.approvals.get", expect.anything(), {});
     expect(runtimeErrors).toHaveLength(0);
     callGatewayFromCli.mockClear();
 
-    await runApprovalsCommand(["approvals", "get", "--node", "macbook"]);
+    const nodeProgram = createProgram();
+    await nodeProgram.parseAsync(["approvals", "get", "--node", "macbook"], { from: "user" });
 
     expect(callGatewayFromCli).toHaveBeenCalledWith("exec.approvals.node.get", expect.anything(), {
       nodeId: "node-1",
@@ -100,10 +96,18 @@ describe("exec approvals CLI", () => {
   });
 
   it("defaults allowlist add to wildcard agent", async () => {
+    resetLocalSnapshot();
+    resetRuntimeCapture();
+    callGatewayFromCli.mockClear();
+
     const saveExecApprovals = vi.mocked(execApprovals.saveExecApprovals);
     saveExecApprovals.mockClear();
 
-    await runApprovalsCommand(["approvals", "allowlist", "add", "/usr/bin/uname"]);
+    const program = new Command();
+    program.exitOverride();
+    registerExecApprovalsCli(program);
+
+    await program.parseAsync(["approvals", "allowlist", "add", "/usr/bin/uname"], { from: "user" });
 
     expect(callGatewayFromCli).not.toHaveBeenCalledWith(
       "exec.approvals.set",
@@ -120,6 +124,7 @@ describe("exec approvals CLI", () => {
   });
 
   it("removes wildcard allowlist entry and prunes empty agent", async () => {
+    resetLocalSnapshot();
     localSnapshot.file = {
       version: 1,
       agents: {
@@ -128,11 +133,16 @@ describe("exec approvals CLI", () => {
         },
       },
     };
+    resetRuntimeCapture();
+    callGatewayFromCli.mockClear();
 
     const saveExecApprovals = vi.mocked(execApprovals.saveExecApprovals);
     saveExecApprovals.mockClear();
 
-    await runApprovalsCommand(["approvals", "allowlist", "remove", "/usr/bin/uname"]);
+    const program = createProgram();
+    await program.parseAsync(["approvals", "allowlist", "remove", "/usr/bin/uname"], {
+      from: "user",
+    });
 
     expect(saveExecApprovals).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import {
   DEFAULT_SAFE_BINS,
   analyzeShellCommand,
@@ -10,13 +12,32 @@ import {
   type ExecCommandSegment,
 } from "./exec-approvals-analysis.js";
 import type { ExecAllowlistEntry } from "./exec-approvals.js";
-import {
-  SAFE_BIN_GENERIC_PROFILE,
-  SAFE_BIN_PROFILES,
-  type SafeBinProfile,
-  validateSafeBinArgv,
-} from "./exec-safe-bin-policy.js";
 import { isTrustedSafeBinPath } from "./exec-safe-bin-trust.js";
+
+function isPathLikeToken(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (trimmed === "-") {
+    return false;
+  }
+  if (trimmed.startsWith("./") || trimmed.startsWith("../") || trimmed.startsWith("~")) {
+    return true;
+  }
+  if (trimmed.startsWith("/")) {
+    return true;
+  }
+  return /^[A-Za-z]:[\\/]/.test(trimmed);
+}
+
+function defaultFileExists(filePath: string): boolean {
+  try {
+    return fs.existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
 
 export function normalizeSafeBins(entries?: string[]): Set<string> {
   if (!Array.isArray(entries)) {
@@ -35,19 +56,23 @@ export function resolveSafeBins(entries?: string[] | null): Set<string> {
   return normalizeSafeBins(entries ?? []);
 }
 
+function hasGlobToken(value: string): boolean {
+  // Safe bins are stdin-only; globbing is both surprising and a historical bypass vector.
+  // Note: we still harden execution-time expansion separately.
+  return /[*?[\]]/.test(value);
+}
+
 export function isSafeBinUsage(params: {
   argv: string[];
   resolution: CommandResolution | null;
   safeBins: Set<string>;
-  platform?: string | null;
+  cwd?: string;
+  fileExists?: (filePath: string) => boolean;
   trustedSafeBinDirs?: ReadonlySet<string>;
-  safeBinProfiles?: Readonly<Record<string, SafeBinProfile>>;
-  safeBinGenericProfile?: SafeBinProfile;
-  isTrustedSafeBinPathFn?: typeof isTrustedSafeBinPath;
 }): boolean {
   // Windows host exec uses PowerShell, which has different parsing/expansion rules.
   // Keep safeBins conservative there (require explicit allowlist entries).
-  if (isWindowsPlatform(params.platform ?? process.platform)) {
+  if (isWindowsPlatform(process.platform)) {
     return false;
   }
   if (params.safeBins.size === 0) {
@@ -58,27 +83,58 @@ export function isSafeBinUsage(params: {
   if (!execName) {
     return false;
   }
-  const matchesSafeBin = params.safeBins.has(execName);
+  const matchesSafeBin =
+    params.safeBins.has(execName) ||
+    (process.platform === "win32" && params.safeBins.has(path.parse(execName).name));
   if (!matchesSafeBin) {
     return false;
   }
   if (!resolution?.resolvedPath) {
     return false;
   }
-  const isTrustedPath = params.isTrustedSafeBinPathFn ?? isTrustedSafeBinPath;
   if (
-    !isTrustedPath({
+    !isTrustedSafeBinPath({
       resolvedPath: resolution.resolvedPath,
       trustedDirs: params.trustedSafeBinDirs,
     })
   ) {
     return false;
   }
+  const cwd = params.cwd ?? process.cwd();
+  const exists = params.fileExists ?? defaultFileExists;
   const argv = params.argv.slice(1);
-  const safeBinProfiles = params.safeBinProfiles ?? SAFE_BIN_PROFILES;
-  const genericSafeBinProfile = params.safeBinGenericProfile ?? SAFE_BIN_GENERIC_PROFILE;
-  const profile = safeBinProfiles[execName] ?? genericSafeBinProfile;
-  return validateSafeBinArgv(argv, profile);
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i];
+    if (!token) {
+      continue;
+    }
+    if (token === "-") {
+      continue;
+    }
+    if (token.startsWith("-")) {
+      const eqIndex = token.indexOf("=");
+      if (eqIndex > 0) {
+        const value = token.slice(eqIndex + 1);
+        if (value && hasGlobToken(value)) {
+          return false;
+        }
+        if (value && (isPathLikeToken(value) || exists(path.resolve(cwd, value)))) {
+          return false;
+        }
+      }
+      continue;
+    }
+    if (hasGlobToken(token)) {
+      return false;
+    }
+    if (isPathLikeToken(token)) {
+      return false;
+    }
+    if (exists(path.resolve(cwd, token))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export type ExecAllowlistEvaluation = {
@@ -95,8 +151,6 @@ function evaluateSegments(
     allowlist: ExecAllowlistEntry[];
     safeBins: Set<string>;
     cwd?: string;
-    platform?: string | null;
-    trustedSafeBinDirs?: ReadonlySet<string>;
     skillBins?: Set<string>;
     autoAllowSkills?: boolean;
   },
@@ -123,8 +177,7 @@ function evaluateSegments(
       argv: segment.argv,
       resolution: segment.resolution,
       safeBins: params.safeBins,
-      platform: params.platform,
-      trustedSafeBinDirs: params.trustedSafeBinDirs,
+      cwd: params.cwd,
     });
     const skillAllow =
       allowSkills && segment.resolution?.executableName
@@ -149,8 +202,6 @@ export function evaluateExecAllowlist(params: {
   allowlist: ExecAllowlistEntry[];
   safeBins: Set<string>;
   cwd?: string;
-  platform?: string | null;
-  trustedSafeBinDirs?: ReadonlySet<string>;
   skillBins?: Set<string>;
   autoAllowSkills?: boolean;
 }): ExecAllowlistEvaluation {
@@ -167,8 +218,6 @@ export function evaluateExecAllowlist(params: {
         allowlist: params.allowlist,
         safeBins: params.safeBins,
         cwd: params.cwd,
-        platform: params.platform,
-        trustedSafeBinDirs: params.trustedSafeBinDirs,
         skillBins: params.skillBins,
         autoAllowSkills: params.autoAllowSkills,
       });
@@ -186,8 +235,6 @@ export function evaluateExecAllowlist(params: {
     allowlist: params.allowlist,
     safeBins: params.safeBins,
     cwd: params.cwd,
-    platform: params.platform,
-    trustedSafeBinDirs: params.trustedSafeBinDirs,
     skillBins: params.skillBins,
     autoAllowSkills: params.autoAllowSkills,
   });
@@ -215,7 +262,6 @@ export function evaluateShellAllowlist(params: {
   safeBins: Set<string>;
   cwd?: string;
   env?: NodeJS.ProcessEnv;
-  trustedSafeBinDirs?: ReadonlySet<string>;
   skillBins?: Set<string>;
   autoAllowSkills?: boolean;
   platform?: string | null;
@@ -244,8 +290,6 @@ export function evaluateShellAllowlist(params: {
       allowlist: params.allowlist,
       safeBins: params.safeBins,
       cwd: params.cwd,
-      platform: params.platform,
-      trustedSafeBinDirs: params.trustedSafeBinDirs,
       skillBins: params.skillBins,
       autoAllowSkills: params.autoAllowSkills,
     });
@@ -279,8 +323,6 @@ export function evaluateShellAllowlist(params: {
       allowlist: params.allowlist,
       safeBins: params.safeBins,
       cwd: params.cwd,
-      platform: params.platform,
-      trustedSafeBinDirs: params.trustedSafeBinDirs,
       skillBins: params.skillBins,
       autoAllowSkills: params.autoAllowSkills,
     });

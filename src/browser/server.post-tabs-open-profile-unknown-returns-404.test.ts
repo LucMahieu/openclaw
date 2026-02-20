@@ -8,7 +8,6 @@ import {
   installBrowserControlServerHooks,
   makeResponse,
   getPwMocks,
-  restoreGatewayPortEnv,
   startBrowserControlServerFromConfig,
   stopBrowserControlServer,
 } from "./server.control-server.test-harness.js";
@@ -32,20 +31,6 @@ describe("browser control server", () => {
     expect(result.status).toBe(404);
     const body = (await result.json()) as { error: string };
     expect(body.error).toContain("not found");
-  });
-
-  it("POST /tabs/open returns 400 for invalid URLs", async () => {
-    await startBrowserControlServerFromConfig();
-    const base = getBrowserControlServerBaseUrl();
-
-    const result = await realFetch(`${base}/tabs/open`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: "not a url" }),
-    });
-    expect(result.status).toBe(400);
-    const body = (await result.json()) as { error: string };
-    expect(body.error).toContain("Invalid URL:");
   });
 });
 
@@ -81,7 +66,11 @@ describe("profile CRUD endpoints", () => {
   afterEach(async () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    restoreGatewayPortEnv(state.prevGatewayPort);
+    if (state.prevGatewayPort === undefined) {
+      delete process.env.OPENCLAW_GATEWAY_PORT;
+    } else {
+      process.env.OPENCLAW_GATEWAY_PORT = state.prevGatewayPort;
+    }
     await stopBrowserControlServer();
   });
 

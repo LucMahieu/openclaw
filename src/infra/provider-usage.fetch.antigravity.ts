@@ -1,5 +1,5 @@
 import { logDebug } from "../logger.js";
-import { fetchJson, parseFiniteNumber } from "./provider-usage.fetch.shared.js";
+import { fetchJson } from "./provider-usage.fetch.shared.js";
 import { clampPercent, PROVIDER_LABELS } from "./provider-usage.shared.js";
 import type { ProviderUsageSnapshot, UsageWindow } from "./provider-usage.types.js";
 
@@ -46,7 +46,16 @@ const METADATA = {
 };
 
 function parseNumber(value: number | string | undefined): number | undefined {
-  return parseFiniteNumber(value);
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
 }
 
 function parseEpochMs(isoString: string | undefined): number | undefined {

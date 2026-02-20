@@ -14,8 +14,7 @@ export function resolveDiscordGatewayIntents(
     GatewayIntents.MessageContent |
     GatewayIntents.DirectMessages |
     GatewayIntents.GuildMessageReactions |
-    GatewayIntents.DirectMessageReactions |
-    GatewayIntents.GuildVoiceStates;
+    GatewayIntents.DirectMessageReactions;
   if (intentsConfig?.presence) {
     intents |= GatewayIntents.GuildPresences;
   }

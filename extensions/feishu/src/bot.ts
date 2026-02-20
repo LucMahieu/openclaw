@@ -11,14 +11,8 @@ import { resolveFeishuAccount } from "./accounts.js";
 import { createFeishuClient } from "./client.js";
 import { tryRecordMessage } from "./dedup.js";
 import { maybeCreateDynamicAgent } from "./dynamic-agent.js";
-import { normalizeFeishuExternalKey } from "./external-keys.js";
-import { downloadMessageResourceFeishu } from "./media.js";
-import {
-  escapeRegExp,
-  extractMentionTargets,
-  extractMessageBody,
-  isMentionForwardRequest,
-} from "./mention.js";
+import { downloadImageFeishu, downloadMessageResourceFeishu } from "./media.js";
+import { extractMentionTargets, extractMessageBody, isMentionForwardRequest } from "./mention.js";
 import {
   resolveFeishuGroupConfig,
   resolveFeishuReplyPolicy,
@@ -204,17 +198,17 @@ function checkBotMentioned(event: FeishuMessageEvent, botOpenId?: string): boole
   return false;
 }
 
-export function stripBotMention(
+function stripBotMention(
   text: string,
   mentions?: FeishuMessageEvent["message"]["mentions"],
 ): string {
   if (!mentions || mentions.length === 0) return text;
   let result = text;
   for (const mention of mentions) {
-    result = result.replace(new RegExp(`@${escapeRegExp(mention.name)}\\s*`, "g"), "");
-    result = result.replace(new RegExp(escapeRegExp(mention.key), "g"), "");
+    result = result.replace(new RegExp(`@${mention.name}\\s*`, "g"), "").trim();
+    result = result.replace(new RegExp(mention.key, "g"), "").trim();
   }
-  return result.trim();
+  return result;
 }
 
 /**
@@ -230,20 +224,18 @@ function parseMediaKeys(
 } {
   try {
     const parsed = JSON.parse(content);
-    const imageKey = normalizeFeishuExternalKey(parsed.image_key);
-    const fileKey = normalizeFeishuExternalKey(parsed.file_key);
     switch (messageType) {
       case "image":
-        return { imageKey };
+        return { imageKey: parsed.image_key };
       case "file":
-        return { fileKey, fileName: parsed.file_name };
+        return { fileKey: parsed.file_key, fileName: parsed.file_name };
       case "audio":
-        return { fileKey };
+        return { fileKey: parsed.file_key };
       case "video":
         // Video has both file_key (video) and image_key (thumbnail)
-        return { fileKey, imageKey };
+        return { fileKey: parsed.file_key, imageKey: parsed.image_key };
       case "sticker":
-        return { fileKey };
+        return { fileKey: parsed.file_key };
       default:
         return {};
     }
@@ -285,10 +277,7 @@ function parsePostContent(content: string): {
             }
           } else if (element.tag === "img" && element.image_key) {
             // Embedded image
-            const imageKey = normalizeFeishuExternalKey(element.image_key);
-            if (imageKey) {
-              imageKeys.push(imageKey);
-            }
+            imageKeys.push(element.image_key);
           }
         }
         textContent += "\n";

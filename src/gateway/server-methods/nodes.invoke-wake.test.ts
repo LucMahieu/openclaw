@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   loadApnsRegistration: vi.fn(),
   resolveApnsAuthConfigFromEnv: vi.fn(),
   sendApnsBackgroundWake: vi.fn(),
-  sendApnsAlert: vi.fn(),
 }));
 
 vi.mock("../../config/config.js", () => ({
@@ -33,7 +32,6 @@ vi.mock("../../infra/push-apns.js", () => ({
   loadApnsRegistration: mocks.loadApnsRegistration,
   resolveApnsAuthConfigFromEnv: mocks.resolveApnsAuthConfigFromEnv,
   sendApnsBackgroundWake: mocks.sendApnsBackgroundWake,
-  sendApnsAlert: mocks.sendApnsAlert,
 }));
 
 type RespondCall = [
@@ -83,17 +81,12 @@ async function invokeNode(params: {
   requestParams?: Partial<Record<string, unknown>>;
 }) {
   const respond = vi.fn();
-  const logGateway = {
-    info: vi.fn(),
-    warn: vi.fn(),
-  };
   await nodeHandlers["node.invoke"]({
     params: makeNodeInvokeParams(params.requestParams),
     respond: respond as never,
     context: {
       nodeRegistry: params.nodeRegistry,
       execApprovalManager: undefined,
-      logGateway,
     } as never,
     client: null,
     req: { type: "req", id: "req-node-invoke", method: "node.invoke" },
@@ -142,7 +135,6 @@ describe("node.invoke APNs wake path", () => {
     mocks.loadApnsRegistration.mockReset();
     mocks.resolveApnsAuthConfigFromEnv.mockReset();
     mocks.sendApnsBackgroundWake.mockReset();
-    mocks.sendApnsAlert.mockReset();
   });
 
   afterEach(() => {
@@ -210,7 +202,7 @@ describe("node.invoke APNs wake path", () => {
     expect(call?.[1]).toMatchObject({ ok: true, nodeId: "ios-node-reconnect" });
   });
 
-  it("forces one retry wake when the first wake still fails to reconnect", async () => {
+  it("throttles repeated wake attempts for the same disconnected node", async () => {
     vi.useFakeTimers();
     mockSuccessfulWakeConfig("ios-node-throttle");
 
@@ -219,14 +211,21 @@ describe("node.invoke APNs wake path", () => {
       invoke: vi.fn().mockResolvedValue({ ok: true }),
     };
 
-    const invokePromise = invokeNode({
+    const first = invokeNode({
       nodeRegistry,
       requestParams: { nodeId: "ios-node-throttle", idempotencyKey: "idem-throttle-1" },
     });
-    await vi.advanceTimersByTimeAsync(20_000);
-    await invokePromise;
+    await vi.advanceTimersByTimeAsync(WAKE_WAIT_TIMEOUT_MS);
+    await first;
 
-    expect(mocks.sendApnsBackgroundWake).toHaveBeenCalledTimes(2);
+    const second = invokeNode({
+      nodeRegistry,
+      requestParams: { nodeId: "ios-node-throttle", idempotencyKey: "idem-throttle-2" },
+    });
+    await vi.advanceTimersByTimeAsync(WAKE_WAIT_TIMEOUT_MS);
+    await second;
+
+    expect(mocks.sendApnsBackgroundWake).toHaveBeenCalledTimes(1);
     expect(nodeRegistry.invoke).not.toHaveBeenCalled();
   });
 });

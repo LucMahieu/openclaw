@@ -435,12 +435,8 @@ public final class OpenClawChatViewModel {
         case let .agent(agent):
             self.handleAgentEvent(agent)
         case .seqGap:
-            self.errorText = nil
+            self.errorText = "Event stream interrupted; try refreshing."
             self.clearPendingRuns(reason: nil)
-            Task {
-                await self.refreshHistoryAfterRun()
-                await self.pollHealthIfNeeded(force: true)
-            }
         }
     }
 

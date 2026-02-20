@@ -1,4 +1,4 @@
-export function validateDottedDecimalIPv4Input(value: string | undefined): string | undefined {
+export function validateIPv4AddressInput(value: string | undefined): string | undefined {
   if (!value) {
     return "IP address is required for custom bind mode";
   }
@@ -16,9 +16,4 @@ export function validateDottedDecimalIPv4Input(value: string | undefined): strin
     return undefined;
   }
   return "Invalid IPv4 address (each octet must be 0-255)";
-}
-
-// Backward-compatible alias for callers using the old helper name.
-export function validateIPv4AddressInput(value: string | undefined): string | undefined {
-  return validateDottedDecimalIPv4Input(value);
 }

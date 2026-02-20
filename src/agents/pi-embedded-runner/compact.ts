@@ -37,7 +37,10 @@ import {
   validateAnthropicTurns,
   validateGeminiTurns,
 } from "../pi-embedded-helpers.js";
-import { applyPiCompactionSettingsFromConfig } from "../pi-settings.js";
+import {
+  ensurePiCompactionReserveTokens,
+  resolveCompactionReserveTokensFloor,
+} from "../pi-settings.js";
 import { createOpenClawCodingTools } from "../pi-tools.js";
 import { resolveSandboxContext } from "../sandbox.js";
 import { repairSessionFileIfNeeded } from "../session-file-repair.js";
@@ -529,9 +532,9 @@ export async function compactEmbeddedPiSessionDirect(
       });
       trackSessionManagerAccess(params.sessionFile);
       const settingsManager = SettingsManager.create(effectiveWorkspace, agentDir);
-      applyPiCompactionSettingsFromConfig({
+      ensurePiCompactionReserveTokens({
         settingsManager,
-        cfg: params.config,
+        minReserveTokens: resolveCompactionReserveTokensFloor(params.config),
       });
       // Call for side effects (sets compaction/pruning runtime state)
       buildEmbeddedExtensionPaths({

@@ -1,4 +1,4 @@
-import { type AnyAgentTool, wrapOwnerOnlyToolExecution } from "./tools/common.js";
+import type { AnyAgentTool } from "./tools/common.js";
 
 export type ToolProfileId = "minimal" | "coding" | "messaging" | "full";
 
@@ -60,7 +60,7 @@ export const TOOL_GROUPS: Record<string, string[]> = {
   ],
 };
 
-const OWNER_ONLY_TOOL_NAME_FALLBACKS = new Set<string>(["whatsapp_login", "cron", "gateway"]);
+const OWNER_ONLY_TOOL_NAMES = new Set<string>(["whatsapp_login"]);
 
 const TOOL_PROFILES: Record<ToolProfileId, ToolProfilePolicy> = {
   minimal: {
@@ -87,24 +87,28 @@ export function normalizeToolName(name: string) {
 }
 
 export function isOwnerOnlyToolName(name: string) {
-  return OWNER_ONLY_TOOL_NAME_FALLBACKS.has(normalizeToolName(name));
-}
-
-function isOwnerOnlyTool(tool: AnyAgentTool) {
-  return tool.ownerOnly === true || isOwnerOnlyToolName(tool.name);
+  return OWNER_ONLY_TOOL_NAMES.has(normalizeToolName(name));
 }
 
 export function applyOwnerOnlyToolPolicy(tools: AnyAgentTool[], senderIsOwner: boolean) {
   const withGuard = tools.map((tool) => {
-    if (!isOwnerOnlyTool(tool)) {
+    if (!isOwnerOnlyToolName(tool.name)) {
       return tool;
     }
-    return wrapOwnerOnlyToolExecution(tool, senderIsOwner);
+    if (senderIsOwner || !tool.execute) {
+      return tool;
+    }
+    return {
+      ...tool,
+      execute: async () => {
+        throw new Error("Tool restricted to owner senders.");
+      },
+    };
   });
   if (senderIsOwner) {
     return withGuard;
   }
-  return withGuard.filter((tool) => !isOwnerOnlyTool(tool));
+  return withGuard.filter((tool) => !isOwnerOnlyToolName(tool.name));
 }
 
 export function normalizeToolList(list?: string[]) {

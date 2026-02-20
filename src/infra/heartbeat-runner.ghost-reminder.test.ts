@@ -11,7 +11,6 @@ import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createPluginRuntime } from "../plugins/runtime/index.js";
 import { createTestRegistry } from "../test-utils/channel-plugins.js";
 import { runHeartbeatOnce } from "./heartbeat-runner.js";
-import { seedSessionStore } from "./heartbeat-runner.test-utils.js";
 import { enqueueSystemEvent, resetSystemEventsForTest } from "./system-events.js";
 
 // Avoid pulling optional runtime deps during isolated runs.
@@ -51,11 +50,22 @@ describe("Ghost reminder bug (issue #13317)", () => {
     };
     const sessionKey = resolveMainSessionKey(cfg);
 
-    await seedSessionStore(storePath, sessionKey, {
-      lastChannel: "telegram",
-      lastProvider: "telegram",
-      lastTo: "155462274",
-    });
+    await fs.writeFile(
+      storePath,
+      JSON.stringify(
+        {
+          [sessionKey]: {
+            sessionId: "sid",
+            updatedAt: Date.now(),
+            lastChannel: "telegram",
+            lastProvider: "telegram",
+            lastTo: "155462274",
+          },
+        },
+        null,
+        2,
+      ),
+    );
 
     return { cfg, sessionKey };
   };

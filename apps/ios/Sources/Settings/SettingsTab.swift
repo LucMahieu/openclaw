@@ -461,10 +461,6 @@ struct SettingsTab: View {
                             self.locationEnabledModeRaw = previous
                             self.lastLocationModeRaw = previous
                         }
-                        return
-                    }
-                    await MainActor.run {
-                        self.gatewayController.refreshActiveGatewayRegistrationFromSettings()
                     }
                 }
             }

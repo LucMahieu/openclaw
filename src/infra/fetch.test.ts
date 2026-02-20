@@ -31,18 +31,6 @@ function createForeignSignalHarness() {
   };
 }
 
-function createThrowingCleanupSignalHarness(cleanupError: Error) {
-  const removeEventListener = vi.fn(() => {
-    throw cleanupError;
-  });
-  const fakeSignal = {
-    aborted: false,
-    addEventListener: (_event: string, _handler: () => void) => {},
-    removeEventListener,
-  } as unknown as AbortSignal;
-  return { fakeSignal, removeEventListener };
-}
-
 describe("wrapFetchWithAbortSignal", () => {
   it("adds duplex for requests with a body", async () => {
     let seenInit: RequestInit | undefined;
@@ -134,7 +122,15 @@ describe("wrapFetchWithAbortSignal", () => {
     );
     const wrapped = wrapFetchWithAbortSignal(fetchImpl);
 
-    const { fakeSignal, removeEventListener } = createThrowingCleanupSignalHarness(cleanupError);
+    const removeEventListener = vi.fn(() => {
+      throw cleanupError;
+    });
+
+    const fakeSignal = {
+      aborted: false,
+      addEventListener: (_event: string, _handler: () => void) => {},
+      removeEventListener,
+    } as unknown as AbortSignal;
 
     await expect(wrapped("https://example.com", { signal: fakeSignal })).rejects.toBe(fetchError);
     expect(removeEventListener).toHaveBeenCalledOnce();
@@ -150,7 +146,15 @@ describe("wrapFetchWithAbortSignal", () => {
     );
     const wrapped = wrapFetchWithAbortSignal(fetchImpl);
 
-    const { fakeSignal, removeEventListener } = createThrowingCleanupSignalHarness(cleanupError);
+    const removeEventListener = vi.fn(() => {
+      throw cleanupError;
+    });
+
+    const fakeSignal = {
+      aborted: false,
+      addEventListener: (_event: string, _handler: () => void) => {},
+      removeEventListener,
+    } as unknown as AbortSignal;
 
     expect(() => wrapped("https://example.com", { signal: fakeSignal })).toThrow(syncError);
     expect(removeEventListener).toHaveBeenCalledOnce();

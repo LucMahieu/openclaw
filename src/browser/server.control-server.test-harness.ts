@@ -39,14 +39,6 @@ export function getBrowserControlServerBaseUrl(): string {
   return `http://127.0.0.1:${state.testPort}`;
 }
 
-export function restoreGatewayPortEnv(prevGatewayPort: string | undefined): void {
-  if (prevGatewayPort === undefined) {
-    delete process.env.OPENCLAW_GATEWAY_PORT;
-    return;
-  }
-  process.env.OPENCLAW_GATEWAY_PORT = prevGatewayPort;
-}
-
 export function setBrowserControlServerCreateTargetId(targetId: string | null): void {
   state.createTargetId = targetId;
 }
@@ -340,7 +332,11 @@ export function installBrowserControlServerHooks() {
   afterEach(async () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-    restoreGatewayPortEnv(state.prevGatewayPort);
+    if (state.prevGatewayPort === undefined) {
+      delete process.env.OPENCLAW_GATEWAY_PORT;
+    } else {
+      process.env.OPENCLAW_GATEWAY_PORT = state.prevGatewayPort;
+    }
     if (state.prevGatewayToken === undefined) {
       delete process.env.OPENCLAW_GATEWAY_TOKEN;
     } else {

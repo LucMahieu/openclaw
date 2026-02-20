@@ -34,11 +34,12 @@ Jobs are ordered so cheap checks fail before expensive ones run:
 
 ## Runners
 
-| Runner                           | Jobs                                       |
-| -------------------------------- | ------------------------------------------ |
-| `blacksmith-16vcpu-ubuntu-2404`  | Most Linux jobs, including scope detection |
-| `blacksmith-16vcpu-windows-2025` | `checks-windows`                           |
-| `macos-latest`                   | `macos`, `ios`                             |
+| Runner                          | Jobs                          |
+| ------------------------------- | ----------------------------- |
+| `blacksmith-4vcpu-ubuntu-2404`  | Most Linux jobs               |
+| `blacksmith-4vcpu-windows-2025` | `checks-windows`              |
+| `macos-latest`                  | `macos`, `ios`                |
+| `ubuntu-latest`                 | Scope detection (lightweight) |
 
 ## Local Equivalents
 

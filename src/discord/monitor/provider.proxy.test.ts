@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   GatewayIntents,
@@ -70,12 +70,6 @@ vi.mock("ws", () => ({
 }));
 
 describe("createDiscordGatewayPlugin", () => {
-  let createDiscordGatewayPlugin: typeof import("./gateway-plugin.js").createDiscordGatewayPlugin;
-
-  beforeAll(async () => {
-    ({ createDiscordGatewayPlugin } = await import("./gateway-plugin.js"));
-  });
-
   function createRuntime() {
     return {
       log: vi.fn(),
@@ -93,6 +87,7 @@ describe("createDiscordGatewayPlugin", () => {
   });
 
   it("uses proxy agent for gateway WebSocket when configured", async () => {
+    const { createDiscordGatewayPlugin } = await import("./gateway-plugin.js");
     const runtime = createRuntime();
 
     const plugin = createDiscordGatewayPlugin({
@@ -116,6 +111,7 @@ describe("createDiscordGatewayPlugin", () => {
   });
 
   it("falls back to the default gateway plugin when proxy is invalid", async () => {
+    const { createDiscordGatewayPlugin } = await import("./gateway-plugin.js");
     const runtime = createRuntime();
 
     const plugin = createDiscordGatewayPlugin({

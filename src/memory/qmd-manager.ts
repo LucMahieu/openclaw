@@ -7,7 +7,6 @@ import { resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { isFileMissingError, statRegularFile } from "./fs-utils.js";
 import { deriveQmdScopeChannel, deriveQmdScopeChatType, isQmdScopeAllowed } from "./qmd-scope.js";
 import {
   listSessionFilesForAgent,
@@ -494,25 +493,19 @@ export class QmdMemoryManager implements MemorySearchManager {
     if (!absPath.endsWith(".md")) {
       throw new Error("path required");
     }
-    const statResult = await statRegularFile(absPath);
-    if (statResult.missing) {
-      return { text: "", path: relPath };
+    const stat = await fs.lstat(absPath);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new Error("path required");
     }
     if (params.from !== undefined || params.lines !== undefined) {
-      const partial = await this.readPartialText(absPath, params.from, params.lines);
-      if (partial.missing) {
-        return { text: "", path: relPath };
-      }
-      return { text: partial.text, path: relPath };
+      const text = await this.readPartialText(absPath, params.from, params.lines);
+      return { text, path: relPath };
     }
-    const full = await this.readFullText(absPath);
-    if (full.missing) {
-      return { text: "", path: relPath };
-    }
+    const content = await fs.readFile(absPath, "utf-8");
     if (!params.from && !params.lines) {
-      return { text: full.text, path: relPath };
+      return { text: content, path: relPath };
     }
-    const lines = full.text.split("\n");
+    const lines = content.split("\n");
     const start = Math.max(1, params.from ?? 1);
     const count = Math.max(1, params.lines ?? lines.length);
     const slice = lines.slice(start - 1, start - 1 + count);
@@ -771,22 +764,10 @@ export class QmdMemoryManager implements MemorySearchManager {
     });
   }
 
-  private async readPartialText(
-    absPath: string,
-    from?: number,
-    lines?: number,
-  ): Promise<{ missing: true } | { missing: false; text: string }> {
+  private async readPartialText(absPath: string, from?: number, lines?: number): Promise<string> {
     const start = Math.max(1, from ?? 1);
     const count = Math.max(1, lines ?? Number.POSITIVE_INFINITY);
-    let handle;
-    try {
-      handle = await fs.open(absPath);
-    } catch (err) {
-      if (isFileMissingError(err)) {
-        return { missing: true };
-      }
-      throw err;
-    }
+    const handle = await fs.open(absPath);
     const stream = handle.createReadStream({ encoding: "utf-8" });
     const rl = readline.createInterface({
       input: stream,
@@ -809,21 +790,7 @@ export class QmdMemoryManager implements MemorySearchManager {
       rl.close();
       await handle.close();
     }
-    return { missing: false, text: selected.slice(0, count).join("\n") };
-  }
-
-  private async readFullText(
-    absPath: string,
-  ): Promise<{ missing: true } | { missing: false; text: string }> {
-    try {
-      const text = await fs.readFile(absPath, "utf-8");
-      return { missing: false, text };
-    } catch (err) {
-      if (isFileMissingError(err)) {
-        return { missing: true };
-      }
-      throw err;
-    }
+    return selected.slice(0, count).join("\n");
   }
 
   private ensureDb(): SqliteDatabase {

@@ -12,11 +12,8 @@ import {
   resolveOutboundTarget,
   resolveSessionDeliveryTarget,
 } from "../../infra/outbound/targets.js";
-import { readChannelAllowFromStoreSync } from "../../pairing/pairing-store.js";
 import { buildChannelAccountBindings } from "../../routing/bindings.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
-import { resolveWhatsAppAccount } from "../../web/accounts.js";
-import { normalizeWhatsAppTarget } from "../../whatsapp/normalize.js";
 
 export async function resolveDeliveryTarget(
   cfg: OpenClawConfig,
@@ -79,7 +76,7 @@ export async function resolveDeliveryTarget(
 
   const channel = resolved.channel ?? fallbackChannel ?? DEFAULT_CHAT_CHANNEL;
   const mode = resolved.mode as "explicit" | "implicit";
-  let toCandidate = resolved.to;
+  const toCandidate = resolved.to;
 
   // When the session has no lastAccountId (e.g. first-run isolated cron
   // session), fall back to the agent's bound account from bindings config.
@@ -115,34 +112,12 @@ export async function resolveDeliveryTarget(
     };
   }
 
-  let allowFromOverride: string[] | undefined;
-  if (channel === "whatsapp") {
-    const configuredAllowFromRaw = resolveWhatsAppAccount({ cfg, accountId }).allowFrom ?? [];
-    const configuredAllowFrom = configuredAllowFromRaw
-      .map((entry) => String(entry).trim())
-      .filter((entry) => entry && entry !== "*")
-      .map((entry) => normalizeWhatsAppTarget(entry))
-      .filter((entry): entry is string => Boolean(entry));
-    const storeAllowFrom = readChannelAllowFromStoreSync("whatsapp", process.env, accountId)
-      .map((entry) => normalizeWhatsAppTarget(entry))
-      .filter((entry): entry is string => Boolean(entry));
-    allowFromOverride = [...new Set([...configuredAllowFrom, ...storeAllowFrom])];
-
-    if (mode === "implicit" && allowFromOverride.length > 0) {
-      const normalizedCurrentTarget = normalizeWhatsAppTarget(toCandidate);
-      if (!normalizedCurrentTarget || !allowFromOverride.includes(normalizedCurrentTarget)) {
-        toCandidate = allowFromOverride[0];
-      }
-    }
-  }
-
   const docked = resolveOutboundTarget({
     channel,
     to: toCandidate,
     cfg,
     accountId,
     mode,
-    allowFrom: allowFromOverride,
   });
   return {
     channel,

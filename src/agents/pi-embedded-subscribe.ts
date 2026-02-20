@@ -16,7 +16,6 @@ import type {
   EmbeddedPiSubscribeContext,
   EmbeddedPiSubscribeState,
 } from "./pi-embedded-subscribe.handlers.types.js";
-import { filterToolResultMediaUrls } from "./pi-embedded-subscribe.tools.js";
 import type { SubscribeEmbeddedPiSessionParams } from "./pi-embedded-subscribe.types.js";
 import { formatReasoningMessage, stripDowngradedToolCallText } from "./pi-embedded-utils.js";
 import { hasNonzeroUsage, normalizeUsage, type UsageLike } from "./usage.js";
@@ -325,14 +324,13 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       markdown: useMarkdown,
     });
     const { text: cleanedText, mediaUrls } = parseReplyDirectives(agg);
-    const filteredMediaUrls = filterToolResultMediaUrls(toolName, mediaUrls ?? []);
-    if (!cleanedText && filteredMediaUrls.length === 0) {
+    if (!cleanedText && (!mediaUrls || mediaUrls.length === 0)) {
       return;
     }
     try {
       void params.onToolResult({
         text: cleanedText,
-        mediaUrls: filteredMediaUrls.length ? filteredMediaUrls : undefined,
+        mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
       });
     } catch {
       // ignore tool result delivery failures
@@ -347,14 +345,13 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     });
     const message = `${agg}\n${formatToolOutputBlock(output)}`;
     const { text: cleanedText, mediaUrls } = parseReplyDirectives(message);
-    const filteredMediaUrls = filterToolResultMediaUrls(toolName, mediaUrls ?? []);
-    if (!cleanedText && filteredMediaUrls.length === 0) {
+    if (!cleanedText && (!mediaUrls || mediaUrls.length === 0)) {
       return;
     }
     try {
       void params.onToolResult({
         text: cleanedText,
-        mediaUrls: filteredMediaUrls.length ? filteredMediaUrls : undefined,
+        mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
       });
     } catch {
       // ignore tool result delivery failures

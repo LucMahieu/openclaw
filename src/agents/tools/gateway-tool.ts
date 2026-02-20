@@ -11,7 +11,7 @@ import {
 import { scheduleGatewaySigusr1Restart } from "../../infra/restart.js";
 import { stringEnum } from "../schema/typebox.js";
 import { type AnyAgentTool, jsonResult, readStringParam } from "./common.js";
-import { callGatewayTool, readGatewayCallOptions } from "./gateway.js";
+import { callGatewayTool } from "./gateway.js";
 
 const DEFAULT_UPDATE_TIMEOUT_MS = 20 * 60_000;
 
@@ -69,7 +69,6 @@ export function createGatewayTool(opts?: {
   return {
     label: "Gateway",
     name: "gateway",
-    ownerOnly: true,
     description:
       "Restart, apply config, or update the gateway in-place (SIGUSR1). Use config.patch for safe partial config updates (merges with existing). Use config.apply only when replacing entire config. Both trigger restart after writing. Always pass a human-readable completion message via the `note` parameter so the system can deliver it to the user after restart.",
     parameters: GatewayToolSchema,
@@ -126,7 +125,19 @@ export function createGatewayTool(opts?: {
         return jsonResult(scheduled);
       }
 
-      const gatewayOpts = readGatewayCallOptions(params);
+      const gatewayUrl =
+        typeof params.gatewayUrl === "string" && params.gatewayUrl.trim()
+          ? params.gatewayUrl.trim()
+          : undefined;
+      const gatewayToken =
+        typeof params.gatewayToken === "string" && params.gatewayToken.trim()
+          ? params.gatewayToken.trim()
+          : undefined;
+      const timeoutMs =
+        typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
+          ? Math.max(1, Math.floor(params.timeoutMs))
+          : undefined;
+      const gatewayOpts = { gatewayUrl, gatewayToken, timeoutMs };
 
       const resolveGatewayWriteMeta = (): {
         sessionKey: string | undefined;
@@ -199,16 +210,15 @@ export function createGatewayTool(opts?: {
       }
       if (action === "update.run") {
         const { sessionKey, note, restartDelayMs } = resolveGatewayWriteMeta();
-        const updateTimeoutMs = gatewayOpts.timeoutMs ?? DEFAULT_UPDATE_TIMEOUT_MS;
         const updateGatewayOpts = {
           ...gatewayOpts,
-          timeoutMs: updateTimeoutMs,
+          timeoutMs: timeoutMs ?? DEFAULT_UPDATE_TIMEOUT_MS,
         };
         const result = await callGatewayTool("update.run", updateGatewayOpts, {
           sessionKey,
           note,
           restartDelayMs,
-          timeoutMs: updateTimeoutMs,
+          timeoutMs: timeoutMs ?? DEFAULT_UPDATE_TIMEOUT_MS,
         });
         return jsonResult({ ok: true, result });
       }

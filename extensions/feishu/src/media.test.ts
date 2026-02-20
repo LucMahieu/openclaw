@@ -199,8 +199,8 @@ describe("sendMediaFeishu msg_type routing", () => {
     expect(messageReplyMock).not.toHaveBeenCalled();
   });
 
-  it("uses isolated temp paths for image downloads", async () => {
-    const imageKey = "img_v3_01abc123";
+  it("does not include imageKey path segments in temp file path", async () => {
+    const maliciousImageKey = "a/../../../../pwned.txt";
     let capturedPath: string | undefined;
 
     imageGetMock.mockResolvedValueOnce({
@@ -212,12 +212,12 @@ describe("sendMediaFeishu msg_type routing", () => {
 
     const result = await downloadImageFeishu({
       cfg: {} as any,
-      imageKey,
+      imageKey: maliciousImageKey,
     });
 
     expect(result.buffer).toEqual(Buffer.from("image-data"));
     expect(capturedPath).toBeDefined();
-    expect(capturedPath).not.toContain(imageKey);
+    expect(capturedPath).not.toContain(maliciousImageKey);
     expect(capturedPath).not.toContain("..");
 
     const tmpRoot = path.resolve(os.tmpdir());
@@ -226,8 +226,8 @@ describe("sendMediaFeishu msg_type routing", () => {
     expect(rel === ".." || rel.startsWith(`..${path.sep}`)).toBe(false);
   });
 
-  it("uses isolated temp paths for message resource downloads", async () => {
-    const fileKey = "file_v3_01abc123";
+  it("does not include fileKey path segments in temp file path", async () => {
+    const maliciousFileKey = "x/../../../../../etc/hosts";
     let capturedPath: string | undefined;
 
     messageResourceGetMock.mockResolvedValueOnce({
@@ -240,42 +240,18 @@ describe("sendMediaFeishu msg_type routing", () => {
     const result = await downloadMessageResourceFeishu({
       cfg: {} as any,
       messageId: "om_123",
-      fileKey,
+      fileKey: maliciousFileKey,
       type: "image",
     });
 
     expect(result.buffer).toEqual(Buffer.from("resource-data"));
     expect(capturedPath).toBeDefined();
-    expect(capturedPath).not.toContain(fileKey);
+    expect(capturedPath).not.toContain(maliciousFileKey);
     expect(capturedPath).not.toContain("..");
 
     const tmpRoot = path.resolve(os.tmpdir());
     const resolved = path.resolve(capturedPath as string);
     const rel = path.relative(tmpRoot, resolved);
     expect(rel === ".." || rel.startsWith(`..${path.sep}`)).toBe(false);
-  });
-
-  it("rejects invalid image keys before calling feishu api", async () => {
-    await expect(
-      downloadImageFeishu({
-        cfg: {} as any,
-        imageKey: "a/../../bad",
-      }),
-    ).rejects.toThrow("invalid image_key");
-
-    expect(imageGetMock).not.toHaveBeenCalled();
-  });
-
-  it("rejects invalid file keys before calling feishu api", async () => {
-    await expect(
-      downloadMessageResourceFeishu({
-        cfg: {} as any,
-        messageId: "om_123",
-        fileKey: "x/../../bad",
-        type: "file",
-      }),
-    ).rejects.toThrow("invalid file_key");
-
-    expect(messageResourceGetMock).not.toHaveBeenCalled();
   });
 });

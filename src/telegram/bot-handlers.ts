@@ -1,15 +1,12 @@
 import type { Message, ReactionTypeEmoji } from "@grammyjs/types";
-import { resolveAgentDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { hasControlCommand } from "../auto-reply/command-detection.js";
 import {
   createInboundDebouncer,
   resolveInboundDebounceMs,
 } from "../auto-reply/inbound-debounce.js";
 import { buildCommandsPaginationKeyboard } from "../auto-reply/reply/commands-info.js";
-import {
-  buildModelsProviderData,
-  formatModelsAvailableHeader,
-} from "../auto-reply/reply/commands-models.js";
+import { buildModelsProviderData } from "../auto-reply/reply/commands-models.js";
 import { resolveStoredModelOverride } from "../auto-reply/reply/model-selection.js";
 import { listSkillCommandsForAgents } from "../auto-reply/skill-commands.js";
 import { buildCommandsMessagePaginated } from "../auto-reply/status.js";
@@ -185,17 +182,13 @@ export const registerTelegramHandlers = ({
     },
   });
 
-  const resolveTelegramSessionState = (params: {
+  const resolveTelegramSessionModel = (params: {
     chatId: number | string;
     isGroup: boolean;
     isForum: boolean;
     messageThreadId?: number;
     resolvedThreadId?: number;
-  }): {
-    agentId: string;
-    sessionEntry: ReturnType<typeof loadSessionStore>[string];
-    model?: string;
-  } => {
+  }): string | undefined => {
     const resolvedThreadId =
       params.resolvedThreadId ??
       resolveTelegramForumThreadId({
@@ -236,29 +229,17 @@ export const registerTelegramHandlers = ({
       sessionKey,
     });
     if (storedOverride) {
-      return {
-        agentId: route.agentId,
-        sessionEntry: entry,
-        model: storedOverride.provider
-          ? `${storedOverride.provider}/${storedOverride.model}`
-          : storedOverride.model,
-      };
+      return storedOverride.provider
+        ? `${storedOverride.provider}/${storedOverride.model}`
+        : storedOverride.model;
     }
     const provider = entry?.modelProvider?.trim();
     const model = entry?.model?.trim();
     if (provider && model) {
-      return {
-        agentId: route.agentId,
-        sessionEntry: entry,
-        model: `${provider}/${model}`,
-      };
+      return `${provider}/${model}`;
     }
     const modelCfg = cfg.agents?.defaults?.model;
-    return {
-      agentId: route.agentId,
-      sessionEntry: entry,
-      model: typeof modelCfg === "string" ? modelCfg : modelCfg?.primary,
-    };
+    return typeof modelCfg === "string" ? modelCfg : modelCfg?.primary;
   };
 
   const processMediaGroup = async (entry: MediaGroupEntry) => {
@@ -952,14 +933,13 @@ export const registerTelegramHandlers = ({
           const safePage = Math.max(1, Math.min(page, totalPages));
 
           // Resolve current model from session (prefer overrides)
-          const sessionState = resolveTelegramSessionState({
+          const currentModel = resolveTelegramSessionModel({
             chatId,
             isGroup,
             isForum,
             messageThreadId,
             resolvedThreadId,
           });
-          const currentModel = sessionState.model;
 
           const buttons = buildModelsKeyboard({
             provider,
@@ -969,13 +949,7 @@ export const registerTelegramHandlers = ({
             totalPages,
             pageSize,
           });
-          const text = formatModelsAvailableHeader({
-            provider,
-            total: models.length,
-            cfg,
-            agentDir: resolveAgentDir(cfg, sessionState.agentId),
-            sessionEntry: sessionState.sessionEntry,
-          });
+          const text = `Models (${provider}) — ${models.length} available`;
           await editMessageWithButtons(text, buttons);
           return;
         }

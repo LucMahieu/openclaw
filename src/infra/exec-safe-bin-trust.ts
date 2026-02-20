@@ -29,7 +29,6 @@ type TrustedSafeBinCache = {
 };
 
 let trustedSafeBinCache: TrustedSafeBinCache | null = null;
-const STARTUP_PATH_ENV = process.env.PATH ?? process.env.Path ?? "";
 
 function normalizeTrustedDir(value: string): string | null {
   const trimmed = value.trim();
@@ -75,7 +74,7 @@ export function getTrustedSafeBinDirs(
   } = {},
 ): Set<string> {
   const delimiter = params.delimiter ?? path.delimiter;
-  const pathEnv = params.pathEnv ?? STARTUP_PATH_ENV;
+  const pathEnv = params.pathEnv ?? process.env.PATH ?? process.env.Path ?? "";
   const key = buildTrustedSafeBinCacheKey(pathEnv, delimiter);
 
   if (!params.refresh && trustedSafeBinCache?.key === key) {

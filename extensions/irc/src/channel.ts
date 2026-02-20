@@ -112,9 +112,6 @@ export const ircPlugin: ChannelPlugin<ResolvedIrcAccount, IrcProbe> = {
       ),
     formatAllowFrom: ({ allowFrom }) =>
       allowFrom.map((entry) => normalizeIrcAllowEntry(String(entry))).filter(Boolean),
-    resolveDefaultTo: ({ cfg, accountId }) =>
-      resolveIrcAccount({ cfg: cfg as CoreConfig, accountId }).config.defaultTo?.trim() ||
-      undefined,
   },
   security: {
     resolveDmPolicy: ({ cfg, accountId, account }) => {

@@ -3,24 +3,11 @@ import Observation
 import UserNotifications
 import WatchKit
 
-struct WatchPromptAction: Codable, Sendable, Equatable, Identifiable {
-    var id: String
-    var label: String
-    var style: String?
-}
-
 struct WatchNotifyMessage: Sendable {
     var id: String?
     var title: String
     var body: String
     var sentAtMs: Int?
-    var promptId: String?
-    var sessionKey: String?
-    var kind: String?
-    var details: String?
-    var expiresAtMs: Int?
-    var risk: String?
-    var actions: [WatchPromptAction]
 }
 
 @MainActor @Observable final class WatchInboxStore {
@@ -30,15 +17,6 @@ struct WatchNotifyMessage: Sendable {
         var transport: String
         var updatedAt: Date
         var lastDeliveryKey: String?
-        var promptId: String?
-        var sessionKey: String?
-        var kind: String?
-        var details: String?
-        var expiresAtMs: Int?
-        var risk: String?
-        var actions: [WatchPromptAction]?
-        var replyStatusText: String?
-        var replyStatusAt: Date?
     }
 
     private static let persistedStateKey = "watch.inbox.state.v1"
@@ -48,16 +26,6 @@ struct WatchNotifyMessage: Sendable {
     var body = "Waiting for messages from your iPhone."
     var transport = "none"
     var updatedAt: Date?
-    var promptId: String?
-    var sessionKey: String?
-    var kind: String?
-    var details: String?
-    var expiresAtMs: Int?
-    var risk: String?
-    var actions: [WatchPromptAction] = []
-    var replyStatusText: String?
-    var replyStatusAt: Date?
-    var isReplySending = false
     private var lastDeliveryKey: String?
 
     init(defaults: UserDefaults = .standard) {
@@ -83,25 +51,14 @@ struct WatchNotifyMessage: Sendable {
         self.body = message.body
         self.transport = transport
         self.updatedAt = Date()
-        self.promptId = message.promptId
-        self.sessionKey = message.sessionKey
-        self.kind = message.kind
-        self.details = message.details
-        self.expiresAtMs = message.expiresAtMs
-        self.risk = message.risk
-        self.actions = message.actions
         self.lastDeliveryKey = deliveryKey
-        self.replyStatusText = nil
-        self.replyStatusAt = nil
-        self.isReplySending = false
         self.persistState()
 
         Task {
             await self.postLocalNotification(
                 identifier: deliveryKey,
                 title: normalizedTitle,
-                body: message.body,
-                risk: message.risk)
+                body: message.body)
         }
     }
 
@@ -117,15 +74,6 @@ struct WatchNotifyMessage: Sendable {
         self.transport = state.transport
         self.updatedAt = state.updatedAt
         self.lastDeliveryKey = state.lastDeliveryKey
-        self.promptId = state.promptId
-        self.sessionKey = state.sessionKey
-        self.kind = state.kind
-        self.details = state.details
-        self.expiresAtMs = state.expiresAtMs
-        self.risk = state.risk
-        self.actions = state.actions ?? []
-        self.replyStatusText = state.replyStatusText
-        self.replyStatusAt = state.replyStatusAt
     }
 
     private func persistState() {
@@ -135,16 +83,7 @@ struct WatchNotifyMessage: Sendable {
             body: self.body,
             transport: self.transport,
             updatedAt: updatedAt,
-            lastDeliveryKey: self.lastDeliveryKey,
-            promptId: self.promptId,
-            sessionKey: self.sessionKey,
-            kind: self.kind,
-            details: self.details,
-            expiresAtMs: self.expiresAtMs,
-            risk: self.risk,
-            actions: self.actions,
-            replyStatusText: self.replyStatusText,
-            replyStatusAt: self.replyStatusAt)
+            lastDeliveryKey: self.lastDeliveryKey)
         guard let data = try? JSONEncoder().encode(state) else { return }
         self.defaults.set(data, forKey: Self.persistedStateKey)
     }
@@ -167,52 +106,7 @@ struct WatchNotifyMessage: Sendable {
         }
     }
 
-    private func mapHapticRisk(_ risk: String?) -> WKHapticType {
-        switch risk?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "high":
-            return .failure
-        case "medium":
-            return .notification
-        default:
-            return .click
-        }
-    }
-
-    func makeReplyDraft(action: WatchPromptAction) -> WatchReplyDraft {
-        let prompt = self.promptId?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return WatchReplyDraft(
-            replyId: UUID().uuidString,
-            promptId: (prompt?.isEmpty == false) ? prompt! : "unknown",
-            actionId: action.id,
-            actionLabel: action.label,
-            sessionKey: self.sessionKey,
-            note: nil,
-            sentAtMs: Int(Date().timeIntervalSince1970 * 1000))
-    }
-
-    func markReplySending(actionLabel: String) {
-        self.isReplySending = true
-        self.replyStatusText = "Sending \(actionLabel)…"
-        self.replyStatusAt = Date()
-        self.persistState()
-    }
-
-    func markReplyResult(_ result: WatchReplySendResult, actionLabel: String) {
-        self.isReplySending = false
-        if let errorMessage = result.errorMessage, !errorMessage.isEmpty {
-            self.replyStatusText = "Failed: \(errorMessage)"
-        } else if result.deliveredImmediately {
-            self.replyStatusText = "\(actionLabel): sent"
-        } else if result.queuedForDelivery {
-            self.replyStatusText = "\(actionLabel): queued"
-        } else {
-            self.replyStatusText = "\(actionLabel): sent"
-        }
-        self.replyStatusAt = Date()
-        self.persistState()
-    }
-
-    private func postLocalNotification(identifier: String, title: String, body: String, risk: String?) async {
+    private func postLocalNotification(identifier: String, title: String, body: String) async {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -225,6 +119,6 @@ struct WatchNotifyMessage: Sendable {
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.2, repeats: false))
 
         _ = try? await UNUserNotificationCenter.current().add(request)
-        WKInterfaceDevice.current().play(self.mapHapticRisk(risk))
+        WKInterfaceDevice.current().play(.notification)
     }
 }

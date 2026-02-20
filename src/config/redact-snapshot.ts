@@ -404,20 +404,6 @@ function toObjectRecord(value: unknown): Record<string, unknown> {
   return {};
 }
 
-function shouldPassThroughRestoreValue(incoming: unknown): boolean {
-  return incoming === null || incoming === undefined || typeof incoming !== "object";
-}
-
-function toRestoreArrayContext(
-  incoming: unknown,
-  prefix: string,
-): { incoming: unknown[]; path: string } | null {
-  if (!Array.isArray(incoming)) {
-    return null;
-  }
-  return { incoming, path: `${prefix}[]` };
-}
-
 function restoreArrayItemWithLookup(params: {
   item: unknown;
   index: number;
@@ -492,25 +478,26 @@ function restoreRedactedValuesWithLookup(
   prefix: string,
   hints: ConfigUiHints,
 ): unknown {
-  if (shouldPassThroughRestoreValue(incoming)) {
+  if (incoming === null || incoming === undefined) {
     return incoming;
   }
-
-  const arrayContext = toRestoreArrayContext(incoming, prefix);
-  if (arrayContext) {
+  if (typeof incoming !== "object") {
+    return incoming;
+  }
+  if (Array.isArray(incoming)) {
     // Note: If the user removed an item in the middle of the array,
     // we have no way of knowing which one. In this case, the last
     // element(s) get(s) chopped off. Not good, so please don't put
     // sensitive string array in the config...
-    const { incoming: incomingArray, path } = arrayContext;
+    const path = `${prefix}[]`;
     if (!lookup.has(path)) {
       if (!isExtensionPath(prefix)) {
-        return incomingArray;
+        return incoming;
       }
-      return restoreRedactedValuesGuessing(incomingArray, original, prefix, hints);
+      return restoreRedactedValuesGuessing(incoming, original, prefix, hints);
     }
     return mapRedactedArray({
-      incoming: incomingArray,
+      incoming,
       original,
       path,
       mapItem: (item, index, originalArray) =>
@@ -564,18 +551,19 @@ function restoreRedactedValuesGuessing(
   prefix: string,
   hints?: ConfigUiHints,
 ): unknown {
-  if (shouldPassThroughRestoreValue(incoming)) {
+  if (incoming === null || incoming === undefined) {
     return incoming;
   }
-
-  const arrayContext = toRestoreArrayContext(incoming, prefix);
-  if (arrayContext) {
+  if (typeof incoming !== "object") {
+    return incoming;
+  }
+  if (Array.isArray(incoming)) {
     // Note: If the user removed an item in the middle of the array,
     // we have no way of knowing which one. In this case, the last
     // element(s) get(s) chopped off. Not good, so please don't put
     // sensitive string array in the config...
-    const { incoming: incomingArray, path } = arrayContext;
-    return restoreGuessingArray(incomingArray, original, path, hints);
+    const path = `${prefix}[]`;
+    return restoreGuessingArray(incoming, original, path, hints);
   }
   const orig = toObjectRecord(original);
   const result: Record<string, unknown> = {};

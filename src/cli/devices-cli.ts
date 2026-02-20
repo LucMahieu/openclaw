@@ -1,12 +1,5 @@
 import type { Command } from "commander";
-import { buildGatewayConnectionDetails, callGateway } from "../gateway/call.js";
-import { isLoopbackHost } from "../gateway/net.js";
-import {
-  approveDevicePairing,
-  listDevicePairing,
-  summarizeDeviceTokens,
-  type PairedDevice as InfraPairedDevice,
-} from "../infra/device-pairing.js";
+import { callGateway } from "../gateway/call.js";
 import { formatTimeAgo } from "../infra/format-time/format-relative.ts";
 import { defaultRuntime } from "../runtime.js";
 import { renderTable } from "../terminal/table.js";
@@ -60,8 +53,6 @@ type DevicePairingList = {
   paired?: PairedDevice[];
 };
 
-const FALLBACK_NOTICE = "Direct scope access failed; using local fallback.";
-
 const devicesCallOpts = (cmd: Command, defaults?: { timeoutMs?: number }) =>
   cmd
     .option("--url <url>", "Gateway WebSocket URL (defaults to gateway.remote.url when configured)")
@@ -89,84 +80,6 @@ const callGatewayCli = async (method: string, opts: DevicesRpcOpts, params?: unk
         mode: GATEWAY_CLIENT_MODES.CLI,
       }),
   );
-
-function normalizeErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-}
-
-function shouldUseLocalPairingFallback(opts: DevicesRpcOpts, error: unknown): boolean {
-  const message = normalizeErrorMessage(error).toLowerCase();
-  if (!message.includes("pairing required")) {
-    return false;
-  }
-  if (typeof opts.url === "string" && opts.url.trim().length > 0) {
-    // Explicit --url might point at a remote/tunneled gateway; never silently
-    // switch to local pairing files in that case.
-    return false;
-  }
-  const connection = buildGatewayConnectionDetails();
-  if (connection.urlSource !== "local loopback") {
-    return false;
-  }
-  try {
-    return isLoopbackHost(new URL(connection.url).hostname);
-  } catch {
-    return false;
-  }
-}
-
-function redactLocalPairedDevice(device: InfraPairedDevice): PairedDevice {
-  const { tokens, ...rest } = device;
-  return {
-    ...(rest as unknown as PairedDevice),
-    tokens: summarizeDeviceTokens(tokens) as DeviceTokenSummary[] | undefined,
-  };
-}
-
-async function listPairingWithFallback(opts: DevicesRpcOpts): Promise<DevicePairingList> {
-  try {
-    return parseDevicePairingList(await callGatewayCli("device.pair.list", opts, {}));
-  } catch (error) {
-    if (!shouldUseLocalPairingFallback(opts, error)) {
-      throw error;
-    }
-    if (opts.json !== true) {
-      defaultRuntime.log(theme.warn(FALLBACK_NOTICE));
-    }
-    const local = await listDevicePairing();
-    return {
-      pending: local.pending as PendingDevice[],
-      paired: local.paired.map((device) => redactLocalPairedDevice(device)),
-    };
-  }
-}
-
-async function approvePairingWithFallback(
-  opts: DevicesRpcOpts,
-  requestId: string,
-): Promise<Record<string, unknown> | null> {
-  try {
-    return await callGatewayCli("device.pair.approve", opts, { requestId });
-  } catch (error) {
-    if (!shouldUseLocalPairingFallback(opts, error)) {
-      throw error;
-    }
-    if (opts.json !== true) {
-      defaultRuntime.log(theme.warn(FALLBACK_NOTICE));
-    }
-    const approved = await approveDevicePairing(requestId);
-    if (!approved) {
-      return null;
-    }
-    return {
-      requestId,
-      device: redactLocalPairedDevice(approved.device),
-    };
-  }
-}
 
 function parseDevicePairingList(value: unknown): DevicePairingList {
   const obj = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
@@ -218,7 +131,8 @@ export function registerDevicesCli(program: Command) {
       .command("list")
       .description("List pending and paired devices")
       .action(async (opts: DevicesRpcOpts) => {
-        const list = await listPairingWithFallback(opts);
+        const result = await callGatewayCli("device.pair.list", opts, {});
+        const list = parseDevicePairingList(result);
         if (opts.json) {
           defaultRuntime.log(JSON.stringify(list, null, 2));
           return;
@@ -370,7 +284,8 @@ export function registerDevicesCli(program: Command) {
       .action(async (requestId: string | undefined, opts: DevicesRpcOpts) => {
         let resolvedRequestId = requestId?.trim();
         if (!resolvedRequestId || opts.latest) {
-          const latest = selectLatestPendingRequest((await listPairingWithFallback(opts)).pending);
+          const listResult = await callGatewayCli("device.pair.list", opts, {});
+          const latest = selectLatestPendingRequest(parseDevicePairingList(listResult).pending);
           resolvedRequestId = latest?.requestId?.trim();
         }
         if (!resolvedRequestId) {
@@ -378,12 +293,9 @@ export function registerDevicesCli(program: Command) {
           defaultRuntime.exit(1);
           return;
         }
-        const result = await approvePairingWithFallback(opts, resolvedRequestId);
-        if (!result) {
-          defaultRuntime.error("unknown requestId");
-          defaultRuntime.exit(1);
-          return;
-        }
+        const result = await callGatewayCli("device.pair.approve", opts, {
+          requestId: resolvedRequestId,
+        });
         if (opts.json) {
           defaultRuntime.log(JSON.stringify(result, null, 2));
           return;

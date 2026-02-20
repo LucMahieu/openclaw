@@ -1,6 +1,5 @@
 import { Command } from "commander";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { runRegisteredCli } from "../test-utils/command-runner.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const updateCommand = vi.fn(async (_opts: unknown) => {});
 const updateStatusCommand = vi.fn(async (_opts: unknown) => {});
@@ -29,12 +28,6 @@ vi.mock("../runtime.js", () => ({
 }));
 
 describe("update cli option collisions", () => {
-  let registerUpdateCli: typeof import("./update-cli.js").registerUpdateCli;
-
-  beforeAll(async () => {
-    ({ registerUpdateCli } = await import("./update-cli.js"));
-  });
-
   beforeEach(() => {
     updateCommand.mockClear();
     updateStatusCommand.mockClear();
@@ -45,10 +38,11 @@ describe("update cli option collisions", () => {
   });
 
   it("forwards parent-captured --json/--timeout to `update status`", async () => {
-    await runRegisteredCli({
-      register: registerUpdateCli as (program: Command) => void,
-      argv: ["update", "status", "--json", "--timeout", "9"],
-    });
+    const { registerUpdateCli } = await import("./update-cli.js");
+    const program = new Command();
+    registerUpdateCli(program);
+
+    await program.parseAsync(["update", "status", "--json", "--timeout", "9"], { from: "user" });
 
     expect(updateStatusCommand).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -59,10 +53,11 @@ describe("update cli option collisions", () => {
   });
 
   it("forwards parent-captured --timeout to `update wizard`", async () => {
-    await runRegisteredCli({
-      register: registerUpdateCli as (program: Command) => void,
-      argv: ["update", "wizard", "--timeout", "13"],
-    });
+    const { registerUpdateCli } = await import("./update-cli.js");
+    const program = new Command();
+    registerUpdateCli(program);
+
+    await program.parseAsync(["update", "wizard", "--timeout", "13"], { from: "user" });
 
     expect(updateWizardCommand).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -15,12 +15,10 @@ import {
   unscopedPackageName,
 } from "../infra/install-safe-path.js";
 import {
-  type NpmIntegrityDrift,
-  type NpmSpecResolution,
+  packNpmSpecToArchive,
   resolveArchiveSourcePath,
   withTempDir,
 } from "../infra/install-source-utils.js";
-import { installFromNpmSpecArchive } from "../infra/npm-pack-install.js";
 import { validateRegistryNpmSpec } from "../infra/npm-registry-spec.js";
 import { extensionUsesSkippedScannerPath, isPathInside } from "../security/scan-paths.js";
 import * as skillScanner from "../security/skill-scanner.js";
@@ -45,17 +43,8 @@ export type InstallPluginResult =
       manifestName?: string;
       version?: string;
       extensions: string[];
-      npmResolution?: NpmSpecResolution;
-      integrityDrift?: NpmIntegrityDrift;
     }
   | { ok: false; error: string };
-
-export type PluginNpmIntegrityDriftParams = {
-  spec: string;
-  expectedIntegrity: string;
-  actualIntegrity: string;
-  resolution: NpmSpecResolution;
-};
 
 const defaultLogger: PluginInstallLogger = {};
 function safeFileName(input: string): string {
@@ -431,8 +420,6 @@ export async function installPluginFromNpmSpec(params: {
   mode?: "install" | "update";
   dryRun?: boolean;
   expectedPluginId?: string;
-  expectedIntegrity?: string;
-  onIntegrityDrift?: (params: PluginNpmIntegrityDriftParams) => boolean | Promise<boolean>;
 }): Promise<InstallPluginResult> {
   const { logger, timeoutMs, mode, dryRun } = resolveTimedPluginInstallModeOptions(params);
   const expectedPluginId = params.expectedPluginId;
@@ -442,38 +429,27 @@ export async function installPluginFromNpmSpec(params: {
     return { ok: false, error: specError };
   }
 
-  logger.info?.(`Downloading ${spec}…`);
-  const flowResult = await installFromNpmSpecArchive({
-    tempDirPrefix: "openclaw-npm-pack-",
-    spec,
-    timeoutMs,
-    expectedIntegrity: params.expectedIntegrity,
-    onIntegrityDrift: params.onIntegrityDrift,
-    warn: (message) => {
-      logger.warn?.(message);
-    },
-    installFromArchive: async ({ archivePath }) =>
-      await installPluginFromArchive({
-        archivePath,
-        extensionsDir: params.extensionsDir,
-        timeoutMs,
-        logger,
-        mode,
-        dryRun,
-        expectedPluginId,
-      }),
+  return await withTempDir("openclaw-npm-pack-", async (tmpDir) => {
+    logger.info?.(`Downloading ${spec}…`);
+    const packedResult = await packNpmSpecToArchive({
+      spec,
+      timeoutMs,
+      cwd: tmpDir,
+    });
+    if (!packedResult.ok) {
+      return packedResult;
+    }
+
+    return await installPluginFromArchive({
+      archivePath: packedResult.archivePath,
+      extensionsDir: params.extensionsDir,
+      timeoutMs,
+      logger,
+      mode,
+      dryRun,
+      expectedPluginId,
+    });
   });
-  if (!flowResult.ok) {
-    return flowResult;
-  }
-  if (!flowResult.installResult.ok) {
-    return flowResult.installResult;
-  }
-  return {
-    ...flowResult.installResult,
-    npmResolution: flowResult.npmResolution,
-    integrityDrift: flowResult.integrityDrift,
-  };
 }
 
 export async function installPluginFromPath(params: {

@@ -99,7 +99,7 @@ struct RootCanvas: View {
                 ChatSheet(
                     // Chat RPCs run on the operator session (read/write scopes).
                     gateway: self.appModel.operatorSession,
-                    sessionKey: self.appModel.chatSessionKey,
+                    sessionKey: self.appModel.mainSessionKey,
                     agentName: self.appModel.activeAgentName,
                     userAccent: self.appModel.seamColor)
             case .quickSetup:

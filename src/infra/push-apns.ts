@@ -425,46 +425,6 @@ function toApnsPushResult(params: {
   };
 }
 
-function createOpenClawPushMetadata(params: {
-  kind: "push.test" | "node.wake";
-  nodeId: string;
-  reason?: string;
-}): { kind: "push.test" | "node.wake"; nodeId: string; ts: number; reason?: string } {
-  return {
-    kind: params.kind,
-    nodeId: params.nodeId,
-    ts: Date.now(),
-    ...(params.reason ? { reason: params.reason } : {}),
-  };
-}
-
-async function sendApnsPush(params: {
-  auth: ApnsAuthConfig;
-  registration: ApnsRegistration;
-  payload: object;
-  timeoutMs?: number;
-  requestSender?: ApnsRequestSender;
-  pushType: ApnsPushType;
-  priority: "10" | "5";
-}): Promise<ApnsPushWakeResult> {
-  const { token, topic, environment, bearerToken } = resolveApnsSendContext({
-    auth: params.auth,
-    registration: params.registration,
-  });
-  const sender = params.requestSender ?? sendApnsRequest;
-  const response = await sender({
-    token,
-    topic,
-    environment,
-    bearerToken,
-    payload: params.payload,
-    timeoutMs: resolveApnsTimeoutMs(params.timeoutMs),
-    pushType: params.pushType,
-    priority: params.priority,
-  });
-  return toApnsPushResult({ response, token, topic, environment });
-}
-
 export async function sendApnsAlert(params: {
   auth: ApnsAuthConfig;
   registration: ApnsRegistration;
@@ -474,6 +434,11 @@ export async function sendApnsAlert(params: {
   timeoutMs?: number;
   requestSender?: ApnsRequestSender;
 }): Promise<ApnsPushAlertResult> {
+  const { token, topic, environment, bearerToken } = resolveApnsSendContext({
+    auth: params.auth,
+    registration: params.registration,
+  });
+
   const payload = {
     aps: {
       alert: {
@@ -482,20 +447,30 @@ export async function sendApnsAlert(params: {
       },
       sound: "default",
     },
-    openclaw: createOpenClawPushMetadata({
+    openclaw: {
       kind: "push.test",
       nodeId: params.nodeId,
-    }),
+      ts: Date.now(),
+    },
   };
 
-  return await sendApnsPush({
-    auth: params.auth,
-    registration: params.registration,
+  const sender = params.requestSender ?? sendApnsRequest;
+  const response = await sender({
+    token,
+    topic,
+    environment,
+    bearerToken,
     payload,
-    timeoutMs: params.timeoutMs,
-    requestSender: params.requestSender,
+    timeoutMs: resolveApnsTimeoutMs(params.timeoutMs),
     pushType: "alert",
     priority: "10",
+  });
+
+  return toApnsPushResult({
+    response,
+    token,
+    topic,
+    environment,
   });
 }
 
@@ -507,23 +482,39 @@ export async function sendApnsBackgroundWake(params: {
   timeoutMs?: number;
   requestSender?: ApnsRequestSender;
 }): Promise<ApnsPushWakeResult> {
+  const { token, topic, environment, bearerToken } = resolveApnsSendContext({
+    auth: params.auth,
+    registration: params.registration,
+  });
+
   const payload = {
     aps: {
       "content-available": 1,
     },
-    openclaw: createOpenClawPushMetadata({
+    openclaw: {
       kind: "node.wake",
       reason: params.wakeReason ?? "node.invoke",
       nodeId: params.nodeId,
-    }),
+      ts: Date.now(),
+    },
   };
-  return await sendApnsPush({
-    auth: params.auth,
-    registration: params.registration,
+
+  const sender = params.requestSender ?? sendApnsRequest;
+  const response = await sender({
+    token,
+    topic,
+    environment,
+    bearerToken,
     payload,
-    timeoutMs: params.timeoutMs,
-    requestSender: params.requestSender,
+    timeoutMs: resolveApnsTimeoutMs(params.timeoutMs),
     pushType: "background",
     priority: "5",
+  });
+
+  return toApnsPushResult({
+    response,
+    token,
+    topic,
+    environment,
   });
 }

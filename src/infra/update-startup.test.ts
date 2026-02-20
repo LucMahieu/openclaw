@@ -147,23 +147,22 @@ describe("update-startup", () => {
     return { log, parsed };
   }
 
-  it.each([
-    {
-      name: "stable channel",
-      channel: "stable" as const,
-    },
-    {
-      name: "beta channel with older beta tag",
-      channel: "beta" as const,
-    },
-  ])("logs latest update hint for $name", async ({ channel }) => {
-    const { log, parsed } = await runUpdateCheckAndReadState(channel);
+  it("logs update hint for npm installs when newer tag exists", async () => {
+    const { log, parsed } = await runUpdateCheckAndReadState("stable");
 
     expect(log.info).toHaveBeenCalledWith(
       expect.stringContaining("update available (latest): v2.0.0"),
     );
     expect(parsed.lastNotifiedVersion).toBe("2.0.0");
     expect(parsed.lastAvailableVersion).toBe("2.0.0");
+  });
+
+  it("uses latest when beta tag is older than release", async () => {
+    const { log, parsed } = await runUpdateCheckAndReadState("beta");
+
+    expect(log.info).toHaveBeenCalledWith(
+      expect.stringContaining("update available (latest): v2.0.0"),
+    );
     expect(parsed.lastNotifiedTag).toBe("latest");
   });
 

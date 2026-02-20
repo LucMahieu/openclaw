@@ -274,11 +274,7 @@ export async function runEmbeddedPiAgent(
         params.config,
       );
       if (!model) {
-        throw new FailoverError(error ?? `Unknown model: ${provider}/${modelId}`, {
-          reason: "model_not_found",
-          provider,
-          model: modelId,
-        });
+        throw new Error(error ?? `Unknown model: ${provider}/${modelId}`);
       }
 
       const ctxInfo = resolveContextWindowInfo({

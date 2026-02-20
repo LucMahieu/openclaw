@@ -31,7 +31,6 @@ import {
   type ExecHostResponse,
   type ExecHostRunResult,
 } from "../infra/exec-host.js";
-import { getTrustedSafeBinDirs } from "../infra/exec-safe-bin-trust.js";
 import { validateSystemRunCommandConsistency } from "../infra/system-run-command.js";
 import { runBrowserProxyCommand } from "./invoke-browser.js";
 
@@ -547,7 +546,6 @@ export async function handleInvoke(
   const runId = params.runId?.trim() || crypto.randomUUID();
   const env = sanitizeEnv(params.env ?? undefined);
   const safeBins = resolveSafeBins(agentExec?.safeBins ?? cfg.tools?.exec?.safeBins);
-  const trustedSafeBinDirs = getTrustedSafeBinDirs();
   const bins = autoAllowSkills ? await skillBins.current() : new Set<string>();
   let analysisOk = false;
   let allowlistMatches: ExecAllowlistEntry[] = [];
@@ -560,7 +558,6 @@ export async function handleInvoke(
       safeBins,
       cwd: params.cwd ?? undefined,
       env,
-      trustedSafeBinDirs,
       skillBins: bins,
       autoAllowSkills,
       platform: process.platform,
@@ -577,7 +574,6 @@ export async function handleInvoke(
       allowlist: approvals.allowlist,
       safeBins,
       cwd: params.cwd ?? undefined,
-      trustedSafeBinDirs,
       skillBins: bins,
       autoAllowSkills,
     });

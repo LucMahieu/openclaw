@@ -169,29 +169,20 @@ export function resolveOutboundTarget(params: {
         })
       : undefined);
 
-  // Fall back to per-channel defaultTo when no explicit target is provided.
-  const effectiveTo =
-    params.to?.trim() ||
-    (params.cfg && plugin.config.resolveDefaultTo
-      ? plugin.config.resolveDefaultTo({
-          cfg: params.cfg,
-          accountId: params.accountId ?? undefined,
-        })
-      : undefined);
-
   const resolveTarget = plugin.outbound?.resolveTarget;
   if (resolveTarget) {
     return resolveTarget({
       cfg: params.cfg,
-      to: effectiveTo,
+      to: params.to,
       allowFrom,
       accountId: params.accountId ?? undefined,
       mode: params.mode ?? "explicit",
     });
   }
 
-  if (effectiveTo) {
-    return { ok: true, to: effectiveTo };
+  const trimmed = params.to?.trim();
+  if (trimmed) {
+    return { ok: true, to: trimmed };
   }
   const hint = plugin.messaging?.targetResolver?.hint;
   return {

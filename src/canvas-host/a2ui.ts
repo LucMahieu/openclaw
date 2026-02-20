@@ -120,10 +120,8 @@ export function injectCanvasLiveReload(html: string): string {
   globalThis.openclawSendUserAction = sendUserAction;
 
   try {
-    const cap = new URLSearchParams(location.search).get("oc_cap");
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    const capQuery = cap ? "?oc_cap=" + encodeURIComponent(cap) : "";
-    const ws = new WebSocket(proto + "://" + location.host + ${JSON.stringify(CANVAS_WS_PATH)} + capQuery);
+    const ws = new WebSocket(proto + "://" + location.host + ${JSON.stringify(CANVAS_WS_PATH)});
     ws.onmessage = (ev) => {
       if (String(ev.data || "") === "reload") location.reload();
     };

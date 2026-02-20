@@ -121,7 +121,6 @@ export function registerBrowserTabRoutes(app: BrowserRouteRegistrar, ctx: Browse
       req,
       res,
       ctx,
-      mapTabError: true,
       run: async (profileCtx) => {
         await profileCtx.ensureBrowserAvailable();
         const tab = await profileCtx.openTab(url);

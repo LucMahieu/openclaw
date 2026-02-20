@@ -1,7 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { logVerbose } from "../../globals.js";
-import { sleep } from "../../utils.js";
-import { loadWebMedia } from "../media.js";
 import { deliverWebReply } from "./deliver-reply.js";
 import type { WebInboundMsg } from "./types.js";
 
@@ -25,6 +22,10 @@ vi.mock("../../utils.js", async (importOriginal) => {
     sleep: vi.fn(async () => {}),
   };
 });
+
+const { loadWebMedia } = await import("../media.js");
+const { sleep } = await import("../../utils.js");
+const { logVerbose } = await import("../../globals.js");
 
 function makeMsg(): WebInboundMsg {
   return {

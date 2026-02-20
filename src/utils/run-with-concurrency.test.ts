@@ -3,10 +3,6 @@ import { runTasksWithConcurrency } from "./run-with-concurrency.js";
 
 describe("runTasksWithConcurrency", () => {
   it("preserves task order with bounded worker count", async () => {
-    const flushMicrotasks = async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    };
     let running = 0;
     let peak = 0;
     const resolvers: Array<(() => void) | undefined> = [];
@@ -21,18 +17,18 @@ describe("runTasksWithConcurrency", () => {
     });
 
     const resultPromise = runTasksWithConcurrency({ tasks, limit: 2 });
-    await flushMicrotasks();
-    expect(typeof resolvers[0]).toBe("function");
-    expect(typeof resolvers[1]).toBe("function");
-
+    await vi.waitFor(() => {
+      expect(typeof resolvers[0]).toBe("function");
+      expect(typeof resolvers[1]).toBe("function");
+    });
     resolvers[1]?.();
-    await flushMicrotasks();
-    expect(typeof resolvers[2]).toBe("function");
-
+    await vi.waitFor(() => {
+      expect(typeof resolvers[2]).toBe("function");
+    });
     resolvers[0]?.();
-    await flushMicrotasks();
-    expect(typeof resolvers[3]).toBe("function");
-
+    await vi.waitFor(() => {
+      expect(typeof resolvers[3]).toBe("function");
+    });
     resolvers[2]?.();
     resolvers[3]?.();
 

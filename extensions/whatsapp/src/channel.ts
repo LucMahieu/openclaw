@@ -118,12 +118,6 @@ export const whatsappPlugin: ChannelPlugin<ResolvedWhatsAppAccount> = {
         .filter((entry): entry is string => Boolean(entry))
         .map((entry) => (entry === "*" ? entry : normalizeWhatsAppTarget(entry)))
         .filter((entry): entry is string => Boolean(entry)),
-    resolveDefaultTo: ({ cfg, accountId }) => {
-      const root = cfg.channels?.whatsapp;
-      const normalized = normalizeAccountId(accountId);
-      const account = root?.accounts?.[normalized];
-      return (account?.defaultTo ?? root?.defaultTo)?.trim() || undefined;
-    },
   },
   security: {
     resolveDmPolicy: ({ cfg, accountId, account }) => {

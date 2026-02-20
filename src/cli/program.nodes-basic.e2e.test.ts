@@ -23,21 +23,6 @@ function formatRuntimeLogCallArg(value: unknown): string {
 }
 
 describe("cli program (nodes basics)", () => {
-  function createProgramWithCleanRuntimeLog() {
-    const program = buildProgram();
-    runtime.log.mockClear();
-    return program;
-  }
-
-  async function runProgram(argv: string[]) {
-    const program = createProgramWithCleanRuntimeLog();
-    await program.parseAsync(argv, { from: "user" });
-  }
-
-  function getRuntimeOutput() {
-    return runtime.log.mock.calls.map((c) => formatRuntimeLogCallArg(c[0])).join("\n");
-  }
-
   function mockGatewayWithIosNodeListAnd(method: "node.describe" | "node.invoke", result: unknown) {
     callGateway.mockImplementation(async (...args: unknown[]) => {
       const opts = (args[0] ?? {}) as { method?: string };
@@ -68,7 +53,9 @@ describe("cli program (nodes basics)", () => {
 
   it("runs nodes list and calls node.pair.list", async () => {
     callGateway.mockResolvedValue({ pending: [], paired: [] });
-    await runProgram(["nodes", "list"]);
+    const program = buildProgram();
+    runtime.log.mockClear();
+    await program.parseAsync(["nodes", "list"], { from: "user" });
     expect(callGateway).toHaveBeenCalledWith(expect.objectContaining({ method: "node.pair.list" }));
     expect(runtime.log).toHaveBeenCalledWith("Pending: 0 · Paired: 0");
   });
@@ -106,10 +93,12 @@ describe("cli program (nodes basics)", () => {
       }
       return { ok: true };
     });
-    await runProgram(["nodes", "list", "--connected"]);
+    const program = buildProgram();
+    runtime.log.mockClear();
+    await program.parseAsync(["nodes", "list", "--connected"], { from: "user" });
 
     expect(callGateway).toHaveBeenCalledWith(expect.objectContaining({ method: "node.list" }));
-    const output = getRuntimeOutput();
+    const output = runtime.log.mock.calls.map((c) => formatRuntimeLogCallArg(c[0])).join("\n");
     expect(output).toContain("One");
     expect(output).not.toContain("Two");
   });
@@ -138,83 +127,89 @@ describe("cli program (nodes basics)", () => {
       }
       return { ok: true };
     });
-    await runProgram(["nodes", "status", "--last-connected", "24h"]);
+    const program = buildProgram();
+    runtime.log.mockClear();
+    await program.parseAsync(["nodes", "status", "--last-connected", "24h"], {
+      from: "user",
+    });
 
     expect(callGateway).toHaveBeenCalledWith(expect.objectContaining({ method: "node.pair.list" }));
-    const output = getRuntimeOutput();
+    const output = runtime.log.mock.calls.map((c) => formatRuntimeLogCallArg(c[0])).join("\n");
     expect(output).toContain("One");
     expect(output).not.toContain("Two");
   });
 
-  it.each([
-    {
-      label: "paired node details",
-      node: {
-        nodeId: "ios-node",
-        displayName: "iOS Node",
-        remoteIp: "192.168.0.88",
-        deviceFamily: "iPad",
-        modelIdentifier: "iPad16,6",
-        caps: ["canvas", "camera"],
-        paired: true,
-        connected: true,
-      },
-      expectedOutput: [
-        "Known: 1 · Paired: 1 · Connected: 1",
-        "iOS Node",
-        "Detail",
-        "device: iPad",
-        "hw: iPad16,6",
-        "Status",
-        "paired",
-        "Caps",
-        "camera",
-        "canvas",
-      ],
-    },
-    {
-      label: "unpaired node details",
-      node: {
-        nodeId: "android-node",
-        displayName: "Peter's Tab S10 Ultra",
-        remoteIp: "192.168.0.99",
-        deviceFamily: "Android",
-        modelIdentifier: "samsung SM-X926B",
-        caps: ["canvas", "camera"],
-        paired: false,
-        connected: true,
-      },
-      expectedOutput: [
-        "Known: 1 · Paired: 0 · Connected: 1",
-        "Peter's Tab",
-        "S10 Ultra",
-        "Detail",
-        "device: Android",
-        "hw: samsung",
-        "SM-X926B",
-        "Status",
-        "unpaired",
-        "connected",
-        "Caps",
-        "camera",
-        "canvas",
-      ],
-    },
-  ])("runs nodes status and renders $label", async ({ node, expectedOutput }) => {
+  it("runs nodes status and calls node.list", async () => {
     callGateway.mockResolvedValue({
       ts: Date.now(),
-      nodes: [node],
+      nodes: [
+        {
+          nodeId: "ios-node",
+          displayName: "iOS Node",
+          remoteIp: "192.168.0.88",
+          deviceFamily: "iPad",
+          modelIdentifier: "iPad16,6",
+          caps: ["canvas", "camera"],
+          paired: true,
+          connected: true,
+        },
+      ],
     });
-    await runProgram(["nodes", "status"]);
+    const program = buildProgram();
+    runtime.log.mockClear();
+    await program.parseAsync(["nodes", "status"], { from: "user" });
 
     expect(callGateway).toHaveBeenCalledWith(
       expect.objectContaining({ method: "node.list", params: {} }),
     );
 
-    const output = getRuntimeOutput();
-    for (const expected of expectedOutput) {
-      expect(output).toContain(expected);
-    }
+    const output = runtime.log.mock.calls.map((c) => formatRuntimeLogCallArg(c[0])).join("\n");
+    expect(output).toContain("Known: 1 · Paired: 1 · Connected: 1");
+    expect(output).toContain("iOS Node");
+    expect(output).toContain("Detail");
+    expect(output).toContain("device: iPad");
+    expect(output).toContain("hw: iPad16,6");
+    expect(output).toContain("Status");
+    expect(output).toContain("paired");
+    expect(output).toContain("Caps");
+    expect(output).toContain("camera");
+    expect(output).toContain("canvas");
+  });
+
+  it("runs nodes status and shows unpaired nodes", async () => {
+    callGateway.mockResolvedValue({
+      ts: Date.now(),
+      nodes: [
+        {
+          nodeId: "android-node",
+          displayName: "Peter's Tab S10 Ultra",
+          remoteIp: "192.168.0.99",
+          deviceFamily: "Android",
+          modelIdentifier: "samsung SM-X926B",
+          caps: ["canvas", "camera"],
+          paired: false,
+          connected: true,
+        },
+      ],
+    });
+    const program = buildProgram();
+    runtime.log.mockClear();
+    await program.parseAsync(["nodes", "status"], { from: "user" });
+
+    const output = runtime.log.mock.calls.map((c) => formatRuntimeLogCallArg(c[0])).join("\n");
+    expect(output).toContain("Known: 1 · Paired: 0 · Connected: 1");
+    expect(output).toContain("Peter's Tab");
+    expect(output).toContain("S10 Ultra");
+    expect(output).toContain("Detail");
+    expect(output).toContain("device: Android");
+    expect(output).toContain("hw: samsung");
+    expect(output).toContain("SM-X926B");
+    expect(output).toContain("Status");
+    expect(output).toContain("unpaired");
+    expect(output).toContain("connected");
+    expect(output).toContain("Caps");
+    expect(output).toContain("camera");
+    expect(output).toContain("canvas");
   });
 
   it("runs nodes describe and calls node.describe", async () => {
@@ -227,7 +222,11 @@ describe("cli program (nodes basics)", () => {
       connected: true,
     });
 
-    await runProgram(["nodes", "describe", "--node", "ios-node"]);
+    const program = buildProgram();
+    runtime.log.mockClear();
+    await program.parseAsync(["nodes", "describe", "--node", "ios-node"], {
+      from: "user",
+    });
 
     expect(callGateway).toHaveBeenCalledWith(
       expect.objectContaining({ method: "node.list", params: {} }),
@@ -239,7 +238,7 @@ describe("cli program (nodes basics)", () => {
       }),
     );
 
-    const out = getRuntimeOutput();
+    const out = runtime.log.mock.calls.map((c) => formatRuntimeLogCallArg(c[0])).join("\n");
     expect(out).toContain("Commands");
     expect(out).toContain("canvas.eval");
   });
@@ -249,7 +248,9 @@ describe("cli program (nodes basics)", () => {
       requestId: "r1",
       node: { nodeId: "n1", token: "t1" },
     });
-    await runProgram(["nodes", "approve", "r1"]);
+    const program = buildProgram();
+    runtime.log.mockClear();
+    await program.parseAsync(["nodes", "approve", "r1"], { from: "user" });
     expect(callGateway).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "node.pair.approve",
@@ -267,16 +268,21 @@ describe("cli program (nodes basics)", () => {
       payload: { result: "ok" },
     });
 
-    await runProgram([
-      "nodes",
-      "invoke",
-      "--node",
-      "ios-node",
-      "--command",
-      "canvas.eval",
-      "--params",
-      '{"javaScript":"1+1"}',
-    ]);
+    const program = buildProgram();
+    runtime.log.mockClear();
+    await program.parseAsync(
+      [
+        "nodes",
+        "invoke",
+        "--node",
+        "ios-node",
+        "--command",
+        "canvas.eval",
+        "--params",
+        '{"javaScript":"1+1"}',
+      ],
+      { from: "user" },
+    );
 
     expect(callGateway).toHaveBeenCalledWith(
       expect.objectContaining({ method: "node.list", params: {} }),
