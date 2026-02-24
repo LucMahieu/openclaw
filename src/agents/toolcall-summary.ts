@@ -6,7 +6,7 @@ import {
 
 const DEFAULT_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free";
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
-const DEFAULT_TIMEOUT_MS = 1400;
+const DEFAULT_TIMEOUT_MS = 3500;
 const MAX_RESPONSE_CHARS = 180;
 const CACHE_MAX_ENTRIES = 200;
 
@@ -176,7 +176,8 @@ export async function summarizeToolCallForUser(
     const payload = {
       model: resolveModel(),
       temperature: 0,
-      max_tokens: 48,
+      max_tokens: 140,
+      reasoning: { exclude: true },
       messages: [
         {
           role: "system",
