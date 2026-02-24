@@ -3,6 +3,7 @@ import path from "node:path";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { CURRENT_SESSION_VERSION, SessionManager } from "@mariozechner/pi-coding-agent";
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
+import { hardStopSessionExecution } from "../../agents/hard-stop.js";
 import { resolveThinkingDefault } from "../../agents/model-selection.js";
 import { repairToolUseResultPairing } from "../../agents/session-transcript-repair.js";
 import { resolveAgentTimeoutMs } from "../../agents/timeout.js";
@@ -799,6 +800,22 @@ export const chatHandlers: GatewayRequestHandlers = {
         abortOrigin: "stop-command",
         stopReason: "stop",
       });
+      const isUiClient = client?.connect?.client?.mode === "ui";
+      if (isUiClient) {
+        const hardStop = await hardStopSessionExecution({
+          cfg,
+          sessionKey,
+          sessionId: entry?.sessionId,
+          escalationMs: 150,
+        });
+        respond(true, {
+          ok: true,
+          aborted: res.aborted,
+          runIds: res.runIds,
+          hardStop,
+        });
+        return;
+      }
       respond(true, { ok: true, aborted: res.aborted, runIds: res.runIds });
       return;
     }

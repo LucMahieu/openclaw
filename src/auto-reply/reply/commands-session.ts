@@ -1,3 +1,4 @@
+import { formatHardStopReplyText, hardStopSessionExecution } from "../../agents/hard-stop.js";
 import { abortEmbeddedPiRun } from "../../agents/pi-embedded.js";
 import { isRestartEnabled } from "../../config/commands.js";
 import type { SessionEntry } from "../../config/sessions.js";
@@ -6,6 +7,7 @@ import { logVerbose } from "../../globals.js";
 import { createInternalHookEvent, triggerInternalHook } from "../../hooks/internal-hooks.js";
 import { scheduleGatewaySigusr1Restart, triggerOpenClawRestart } from "../../infra/restart.js";
 import { loadCostUsageSummary, loadSessionCostSummary } from "../../infra/session-cost-usage.js";
+import { normalizeMessageChannel } from "../../utils/message-channel.js";
 import { formatTokenCount, formatUsd } from "../../utils/usage-format.js";
 import { parseActivationCommand } from "../group-activation.js";
 import { parseSendPolicyCommand } from "../send-policy.js";
@@ -312,6 +314,39 @@ export const handleStopCommand: CommandHandler = async (params, allowTextCommand
     sessionEntry: params.sessionEntry,
     sessionStore: params.sessionStore,
   });
+  const isWhatsAppStop = normalizeMessageChannel(params.command.surface) === "whatsapp";
+  if (isWhatsAppStop) {
+    const hardStop = await hardStopSessionExecution({
+      cfg: params.cfg,
+      sessionKey: abortTarget.key ?? params.sessionKey,
+      sessionId: abortTarget.sessionId,
+      escalationMs: 150,
+    });
+    await applyAbortTarget({
+      abortTarget,
+      sessionStore: params.sessionStore,
+      storePath: params.storePath,
+      abortKey: params.command.abortKey,
+    });
+
+    // Trigger internal hook for stop command
+    const hookEvent = createInternalHookEvent(
+      "command",
+      "stop",
+      abortTarget.key ?? params.sessionKey ?? "",
+      {
+        sessionEntry: abortTarget.entry ?? params.sessionEntry,
+        sessionId: abortTarget.sessionId,
+        commandSource: params.command.surface,
+        senderId: params.command.senderId,
+        hardStop: true,
+        hardStopSummary: hardStop,
+      },
+    );
+    await triggerInternalHook(hookEvent);
+
+    return { shouldContinue: false, reply: { text: formatHardStopReplyText(hardStop) } };
+  }
   const cleared = clearSessionQueues([abortTarget.key, abortTarget.sessionId]);
   if (cleared.followupCleared > 0 || cleared.laneCleared > 0) {
     logVerbose(
