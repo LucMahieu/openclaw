@@ -119,6 +119,6 @@ git commit -m "Add Clawd workspace"
 - Run installs from the Skills tab; it hides the button if a binary is already present.
 - Keep heartbeats enabled so the assistant can schedule reminders, monitor inboxes, and trigger camera captures.
 - Canvas UI runs full-screen with native overlays. Avoid placing critical controls in the top-left/top-right/bottom edges; add explicit gutters in the layout and don’t rely on safe-area insets.
-- For browser-driven verification, use `openclaw browser` (tabs/status/screenshot) with the OpenClaw-managed Chrome profile.
-- For DOM inspection, use `openclaw browser eval|query|dom|snapshot` (and `--json`/`--out` when you need machine output).
-- For interactions, use `openclaw browser click|type|hover|drag|select|upload|press|wait|navigate|back|evaluate|run` (click/type require snapshot refs; use `evaluate` for CSS selectors).
+- For web tasks that must mimic real user behavior, use VM computer use (screenshots + visual interactions).
+- Do not use browser ref/DOM flows (`snapshot`, `ref e##`, `click/type ref`, `evaluate`, `query`, `dom`) when the workflow is intended to run as computer use.
+- Keep signup/login/account-creation flows in VM computer use end-to-end.
