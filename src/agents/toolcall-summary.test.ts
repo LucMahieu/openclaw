@@ -116,4 +116,51 @@ describe("summarizeToolCallForUser", () => {
       "Bearer sk-or-from-profile",
     );
   });
+
+  it("falls back to other openrouter profiles when ordered id is missing", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-tool-summary-order-"));
+    vi.stubEnv("OPENCLAW_AGENT_DIR", agentDir);
+    fs.writeFileSync(
+      path.join(agentDir, "auth-profiles.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          profiles: {
+            "openrouter:manual": {
+              type: "token",
+              provider: "openrouter",
+              token: "sk-or-manual-token",
+            },
+          },
+          order: {
+            openrouter: ["openrouter:default"],
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "Vult de loginflow in en start authenticatie." } }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "t5",
+      args: { command: "codex login" },
+      fallbackMeta: "run login",
+    });
+
+    expect(summary).toBe("Vult de loginflow in en start authenticatie.");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((requestInit.headers as Record<string, string>).Authorization).toBe(
+      "Bearer sk-or-manual-token",
+    );
+  });
 });

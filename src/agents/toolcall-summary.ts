@@ -42,7 +42,7 @@ function resolveApiKey(): string | undefined {
     const store = ensureAuthProfileStore(undefined, { allowKeychainPrompt: false });
     const ordered = resolveAuthProfileOrder({ store, provider: "openrouter" });
     const fallback = listProfilesForProvider(store, "openrouter");
-    const candidateIds = ordered.length > 0 ? ordered : fallback;
+    const candidateIds = [...new Set([...ordered, ...fallback])];
 
     for (const profileId of candidateIds) {
       const credential = store.profiles[profileId];
