@@ -40,6 +40,11 @@
       "title": "Read",
       "detailKeys": ["path"]
     },
+    "image": {
+      "emoji": "📸",
+      "title": "Image",
+      "detailKeys": ["path", "filePath", "imagePath", "url"]
+    },
     "write": {
       "emoji": "✍️",
       "title": "Write",
