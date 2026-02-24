@@ -26,7 +26,7 @@
   },
   "tools": {
     "exec": {
-      "emoji": "🛠️",
+      "emoji": "💻",
       "title": "Exec",
       "detailKeys": ["command"]
     },

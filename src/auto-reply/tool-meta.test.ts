@@ -50,12 +50,18 @@ describe("tool meta formatting", () => {
     const out = formatToolAggregate("exec", [`cd ${home}/dir && gemini 2>&1 · elevated`], {
       markdown: true,
     });
-    expect(out).toBe("🛠️ Exec: elevated · `cd ~/dir && gemini 2>&1`");
+    expect(out).toBe("💻 elevated · `cd ~/dir && gemini 2>&1`");
   });
 
   it("formats prefixes with default labels", () => {
     vi.stubEnv("HOME", home);
     expect(formatToolPrefix(undefined, undefined)).toBe("🧩 Tool");
     expect(formatToolPrefix("x", `${home}/a.txt`)).toBe("🧩 X: ~/a.txt");
+    expect(formatToolPrefix("image", "Screenshot van ChatGPT Atlas")).toBe(
+      "📸 Screenshot van ChatGPT Atlas",
+    );
+    expect(formatToolPrefix("exec", "Running a command in terminal.")).toBe(
+      "💻 Running a command in terminal.",
+    );
   });
 });

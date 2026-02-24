@@ -1,4 +1,4 @@
-import { formatToolSummary, resolveToolDisplay } from "../agents/tool-display.js";
+import { formatToolDetail, formatToolSummary, resolveToolDisplay } from "../agents/tool-display.js";
 import { shortenHomeInString, shortenHomePath } from "../utils.js";
 
 type ToolAggregateOptions = {
@@ -23,7 +23,8 @@ export function formatToolAggregate(
 ): string {
   const filtered = (metas ?? []).filter(Boolean).map(shortenMeta);
   const display = resolveToolDisplay({ name: toolName });
-  const prefix = `${display.emoji} ${display.label}`;
+  const hideLabel = shouldHideToolLabel(toolName);
+  const prefix = hideLabel ? display.emoji : `${display.emoji} ${display.label}`;
   if (!filtered.length) {
     return prefix;
   }
@@ -66,12 +67,17 @@ export function formatToolAggregate(
 
   const allSegments = [...rawSegments, ...segments];
   const meta = allSegments.join("; ");
-  return `${prefix}: ${formatMetaForDisplay(toolName, meta, options?.markdown)}`;
+  const formattedMeta = formatMetaForDisplay(toolName, meta, options?.markdown);
+  return hideLabel ? `${prefix} ${formattedMeta}` : `${prefix}: ${formattedMeta}`;
 }
 
 export function formatToolPrefix(toolName?: string, meta?: string) {
   const extra = meta?.trim() ? shortenMeta(meta) : undefined;
   const display = resolveToolDisplay({ name: toolName, meta: extra });
+  if (shouldHideToolLabel(toolName)) {
+    const detail = formatToolDetail(display);
+    return detail ? `${display.emoji} ${detail}` : display.emoji;
+  }
   return formatToolSummary(display);
 }
 
@@ -140,4 +146,9 @@ function maybeWrapMarkdown(value: string, markdown?: boolean): string {
     return value;
   }
   return `\`${value}\``;
+}
+
+function shouldHideToolLabel(toolName?: string): boolean {
+  const normalized = (toolName ?? "").trim().toLowerCase();
+  return normalized === "exec" || normalized === "bash" || normalized === "image";
 }
