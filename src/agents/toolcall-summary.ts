@@ -28,6 +28,21 @@ type OpenRouterChatCompletionResponse = {
 
 const summaryCache = new Map<string, string>();
 const IMAGE_PATH_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|heic|heif|avif|svg)$/i;
+const PROGRESSIVE_LEAD_MAP: Array<[RegExp, string]> = [
+  [/^\s*Runs\b/i, "Running"],
+  [/^\s*Analyzes\b/i, "Analyzing"],
+  [/^\s*Finds\b/i, "Finding"],
+  [/^\s*Opens\b/i, "Opening"],
+  [/^\s*Clicks\b/i, "Clicking"],
+  [/^\s*Switches\b/i, "Switching"],
+  [/^\s*Captures\b/i, "Capturing"],
+  [/^\s*Extracts\b/i, "Extracting"],
+  [/^\s*Returns\b/i, "Returning"],
+  [/^\s*Locates\b/i, "Locating"],
+  [/^\s*Waits\b/i, "Waiting"],
+  [/^\s*Uses\b/i, "Using"],
+  [/^\s*Types\b/i, "Typing"],
+];
 
 function normalizeKey(value: string | undefined): string {
   return (value ?? "").trim();
@@ -138,6 +153,15 @@ function sanitizeSummary(value: string | undefined): string | undefined {
   return `${trimmed.slice(0, MAX_RESPONSE_CHARS - 1).trimEnd()}…`;
 }
 
+function normalizeProgressiveLead(value: string): string {
+  for (const [pattern, replacement] of PROGRESSIVE_LEAD_MAP) {
+    if (pattern.test(value)) {
+      return value.replace(pattern, replacement);
+    }
+  }
+  return value;
+}
+
 function extractStringArg(args: unknown, key: string): string | undefined {
   if (!args || typeof args !== "object") {
     return undefined;
@@ -164,7 +188,7 @@ function extractImagePathFromArgs(args: unknown): string | undefined {
 function resolveFallbackSummary(input: ToolCallSummaryInput): string | undefined {
   const explicit = sanitizeSummary(input.fallbackMeta);
   if (explicit) {
-    return explicit;
+    return normalizeProgressiveLead(explicit);
   }
 
   const toolName = normalizeKey(input.toolName).toLowerCase();
@@ -236,7 +260,7 @@ export async function summarizeToolCallForUser(
         {
           role: "system",
           content:
-            "Je vat tool calls samen voor eindgebruikers. Antwoord altijd in natuurlijk Nederlands. Geef precies 1 korte zin (6-14 woorden), feitelijk en specifiek. Geen markdown, geen bullets, geen IDs.",
+            "You summarize tool calls for chat users. Return exactly one short sentence (6-14 words), factual and specific. Start with an agent-progress verb in English (for example: Running, Analyzing, Clicking, Opening, Switching). No markdown, no bullet points, no IDs.",
         },
         {
           role: "user",
@@ -280,7 +304,7 @@ export async function summarizeToolCallForUser(
 
     const raw = (await res.json()) as OpenRouterChatCompletionResponse;
     const content = extractContentText(raw.choices?.[0]?.message?.content);
-    const summary = sanitizeSummary(content);
+    const summary = sanitizeSummary(normalizeProgressiveLead(content));
     if (!summary) {
       return fallbackSummary;
     }

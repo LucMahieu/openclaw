@@ -50,7 +50,7 @@ describe("summarizeToolCallForUser", () => {
     expect(typeof requestBody).toBe("string");
     const body = JSON.parse(requestBody as string);
     expect(body.model).toBe("nvidia/nemotron-3-nano-30b-a3b:free");
-    expect(String(body.messages?.[0]?.content ?? "")).toContain("natuurlijk Nederlands");
+    expect(String(body.messages?.[0]?.content ?? "")).toContain("agent-progress verb");
   });
 
   it("falls back when provider returns non-ok response", async () => {
@@ -173,5 +173,16 @@ describe("summarizeToolCallForUser", () => {
       args: {},
     });
     expect(summary).toBe("Screenshot verwerken");
+  });
+
+  it("normalizes third-person lead into progressive style", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "t7",
+      args: { command: "echo hi" },
+      fallbackMeta: "Runs a command to print output.",
+    });
+    expect(summary).toBe("Running a command to print output.");
   });
 });
