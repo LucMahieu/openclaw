@@ -470,7 +470,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
       noteLocalRunId(runId);
       state.activeChatRunId = runId;
       setActivityStatus("sending");
-      await client.sendChat({
+      const sendAck = await client.sendChat({
         sessionKey: state.currentSessionKey,
         message: text,
         thinking: opts.thinking,
@@ -478,7 +478,23 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         timeoutMs: opts.timeoutMs,
         runId,
       });
-      setActivityStatus("waiting");
+      const isImmediateCommandAck =
+        sendAck &&
+        typeof sendAck === "object" &&
+        "response" in sendAck &&
+        sendAck.response &&
+        typeof sendAck.response === "object" &&
+        "ok" in sendAck.response;
+      if (isImmediateCommandAck) {
+        const response = sendAck.response as { ok: boolean; aborted?: boolean };
+        forgetLocalRunId?.(runId);
+        if (state.activeChatRunId === runId) {
+          state.activeChatRunId = null;
+        }
+        setActivityStatus(response.aborted ? "aborted" : "idle");
+      } else {
+        setActivityStatus("waiting");
+      }
     } catch (err) {
       if (state.activeChatRunId) {
         forgetLocalRunId?.(state.activeChatRunId);

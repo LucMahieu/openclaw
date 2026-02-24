@@ -32,6 +32,22 @@ export type ChatSendOptions = {
   runId?: string;
 };
 
+export type ChatSendAck =
+  | {
+      runId: string;
+      status?: "started" | "in_flight";
+      response?: unknown;
+    }
+  | {
+      runId: string;
+      response: {
+        ok: boolean;
+        aborted?: boolean;
+        runIds?: string[];
+        hardStop?: unknown;
+      };
+    };
+
 export type GatewayEvent = {
   event: string;
   payload?: unknown;
@@ -161,9 +177,16 @@ export class GatewayChatClient {
     await this.readyPromise;
   }
 
-  async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {
+  async sendChat(opts: ChatSendOptions): Promise<ChatSendAck> {
     const runId = opts.runId ?? randomUUID();
-    await this.client.request("chat.send", {
+    const response = await this.client.request<{
+      runId?: string;
+      status?: "started" | "in_flight";
+      ok?: boolean;
+      aborted?: boolean;
+      runIds?: string[];
+      hardStop?: unknown;
+    }>("chat.send", {
       sessionKey: opts.sessionKey,
       message: opts.message,
       thinking: opts.thinking,
@@ -171,7 +194,18 @@ export class GatewayChatClient {
       timeoutMs: opts.timeoutMs,
       idempotencyKey: runId,
     });
-    return { runId };
+    if (response && typeof response === "object" && response.ok === true) {
+      return {
+        runId,
+        response: {
+          ok: true,
+          aborted: response.aborted,
+          runIds: response.runIds,
+          hardStop: response.hardStop,
+        },
+      };
+    }
+    return { runId, status: response?.status, response };
   }
 
   async abortChat(opts: { sessionKey: string; runId: string }) {

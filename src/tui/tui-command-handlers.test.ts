@@ -83,4 +83,51 @@ describe("tui command handlers", () => {
     expect(resetSession).toHaveBeenNthCalledWith(2, "agent:main:main", "reset");
     expect(loadHistory).toHaveBeenCalledTimes(2);
   });
+
+  it("clears pending waiting state on immediate command ack (e.g. /stop)", async () => {
+    const sendChat = vi.fn().mockResolvedValue({
+      runId: "r1",
+      response: { ok: true, aborted: true },
+    });
+    const addUser = vi.fn();
+    const addSystem = vi.fn();
+    const requestRender = vi.fn();
+    const setActivityStatus = vi.fn();
+    const noteLocalRunId = vi.fn();
+    const forgetLocalRunId = vi.fn();
+    const state = {
+      currentSessionKey: "agent:main:main",
+      activeChatRunId: null as string | null,
+      sessionInfo: {},
+    };
+
+    const { handleCommand } = createCommandHandlers({
+      client: { sendChat } as never,
+      chatLog: { addUser, addSystem } as never,
+      tui: { requestRender } as never,
+      opts: {},
+      state: state as never,
+      deliverDefault: false,
+      openOverlay: vi.fn(),
+      closeOverlay: vi.fn(),
+      refreshSessionInfo: vi.fn(),
+      loadHistory: vi.fn(),
+      setSession: vi.fn(),
+      refreshAgents: vi.fn(),
+      abortActive: vi.fn(),
+      setActivityStatus,
+      formatSessionKey: vi.fn(),
+      applySessionInfoFromPatch: vi.fn(),
+      noteLocalRunId,
+      forgetLocalRunId,
+    });
+
+    await handleCommand("/stop");
+
+    expect(addUser).toHaveBeenCalledWith("/stop");
+    expect(setActivityStatus).toHaveBeenNthCalledWith(1, "sending");
+    expect(setActivityStatus).toHaveBeenNthCalledWith(2, "aborted");
+    expect(forgetLocalRunId).toHaveBeenCalledTimes(1);
+    expect(state.activeChatRunId).toBeNull();
+  });
 });
