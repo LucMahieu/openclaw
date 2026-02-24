@@ -20,6 +20,7 @@ type ToolCallSummaryInput = {
 
 type OpenRouterChatCompletionResponse = {
   choices?: Array<{
+    finish_reason?: string;
     message?: {
       content?: string | Array<{ type?: string; text?: string }>;
     };
@@ -29,6 +30,8 @@ type OpenRouterChatCompletionResponse = {
 const summaryCache = new Map<string, string>();
 const IMAGE_PATH_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|heic|heif|avif|svg)$/i;
 const PROGRESSIVE_LEAD_MAP: Array<[RegExp, string]> = [
+  [/^\s*run\b/i, "Running"],
+  [/^\s*analyze\b/i, "Analyzing"],
   [/^\s*Runs\b/i, "Running"],
   [/^\s*Analyzes\b/i, "Analyzing"],
   [/^\s*Finds\b/i, "Finding"],
@@ -251,65 +254,86 @@ export async function summarizeToolCallForUser(
   const timer = setTimeout(() => controller.abort(new Error("tool summary timeout")), timeoutMs);
 
   try {
-    const payload = {
-      model: resolveModel(),
-      temperature: 0,
-      max_tokens: 220,
-      reasoning: { exclude: true },
-      messages: [
-        {
-          role: "system",
-          content:
-            "You summarize tool calls for chat users. Return exactly one short sentence (6-14 words), factual and specific. Start with an agent-progress verb in English (for example: Running, Analyzing, Clicking, Opening, Switching). No markdown, no bullet points, no IDs.",
-        },
-        {
-          role: "user",
-          content: JSON.stringify(
-            {
-              task: "Summarize this tool call for end-user visibility",
-              constraints: {
-                concise: true,
-                no_jargon: true,
-                avoid_information_overload: true,
+    const requestSummary = async (
+      maxTokens: number,
+    ): Promise<{ ok: boolean; summary?: string; finishReason?: string }> => {
+      const payload = {
+        model: resolveModel(),
+        temperature: 0,
+        max_tokens: maxTokens,
+        reasoning: { exclude: true },
+        include_reasoning: false,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You summarize tool calls for chat users. Return exactly one short sentence (6-14 words), factual and specific. Start with an agent-progress verb in English (for example: Running, Analyzing, Clicking, Opening, Switching). No markdown, no bullet points, no IDs.",
+          },
+          {
+            role: "user",
+            content: JSON.stringify(
+              {
+                task: "Summarize this tool call for end-user visibility",
+                constraints: {
+                  concise: true,
+                  no_jargon: true,
+                  avoid_information_overload: true,
+                },
+                toolCall: {
+                  runId: input.runId,
+                  toolName,
+                  toolCallId,
+                  args: input.args,
+                },
               },
-              toolCall: {
-                runId: input.runId,
-                toolName,
-                toolCallId,
-                args: input.args,
-              },
-            },
-            null,
-            2,
-          ),
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+
+      const res = await fetch(`${resolveBaseUrl()}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://openclaw.ai",
+          "X-Title": "OpenClaw Tool Summary",
         },
-      ],
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        return { ok: false };
+      }
+
+      const raw = (await res.json()) as OpenRouterChatCompletionResponse;
+      const content = extractContentText(raw.choices?.[0]?.message?.content);
+      const finishReason = raw.choices?.[0]?.finish_reason;
+      const summary = sanitizeSummary(normalizeProgressiveLead(content));
+      return { ok: true, summary, finishReason };
     };
 
-    const res = await fetch(`${resolveBaseUrl()}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": "https://openclaw.ai",
-        "X-Title": "OpenClaw Tool Summary",
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
+    const primary = await requestSummary(220);
+    if (primary.summary) {
+      setCache(cacheKey, primary.summary);
+      return primary.summary;
+    }
 
-    if (!res.ok) {
+    const shouldRetry =
+      primary.ok && primary.finishReason?.toLowerCase() === "length" && !primary.summary;
+    if (!shouldRetry) {
       return fallbackSummary;
     }
 
-    const raw = (await res.json()) as OpenRouterChatCompletionResponse;
-    const content = extractContentText(raw.choices?.[0]?.message?.content);
-    const summary = sanitizeSummary(normalizeProgressiveLead(content));
-    if (!summary) {
+    const retry = await requestSummary(420);
+    if (!retry.summary) {
       return fallbackSummary;
     }
-    setCache(cacheKey, summary);
-    return summary;
+    setCache(cacheKey, retry.summary);
+    return retry.summary;
   } catch {
     return fallbackSummary;
   } finally {

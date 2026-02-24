@@ -31,7 +31,12 @@ describe("summarizeToolCallForUser", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: "Opent WhatsApp Web en focust op het invoerveld." } }],
+        choices: [
+          {
+            finish_reason: "stop",
+            message: { content: "Opent WhatsApp Web en focust op het invoerveld." },
+          },
+        ],
       }),
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -67,7 +72,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "run # Click",
     });
 
-    expect(summary).toBe("run # Click");
+    expect(summary).toBe("Running # Click");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -181,8 +186,42 @@ describe("summarizeToolCallForUser", () => {
       toolName: "exec",
       toolCallId: "t7",
       args: { command: "echo hi" },
-      fallbackMeta: "Runs a command to print output.",
+      fallbackMeta: "run a command to print output.",
     });
     expect(summary).toBe("Running a command to print output.");
+  });
+
+  it("retries once on empty length-truncated response", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ finish_reason: "length", message: { content: "" } }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "Analyzing image for button coordinates." },
+            },
+          ],
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "image",
+      toolCallId: "t8",
+      args: { imagePath: "/tmp/screen.png" },
+      fallbackMeta: "Screenshot verwerken",
+    });
+
+    expect(summary).toBe("Analyzing image for button coordinates.");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
