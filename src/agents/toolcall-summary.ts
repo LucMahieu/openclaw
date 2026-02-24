@@ -27,6 +27,7 @@ type OpenRouterChatCompletionResponse = {
 };
 
 const summaryCache = new Map<string, string>();
+const IMAGE_PATH_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|heic|heif|avif|svg)$/i;
 
 function normalizeKey(value: string | undefined): string {
   return (value ?? "").trim();
@@ -137,6 +138,57 @@ function sanitizeSummary(value: string | undefined): string | undefined {
   return `${trimmed.slice(0, MAX_RESPONSE_CHARS - 1).trimEnd()}…`;
 }
 
+function extractStringArg(args: unknown, key: string): string | undefined {
+  if (!args || typeof args !== "object") {
+    return undefined;
+  }
+  const value = (args as Record<string, unknown>)[key];
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function extractImagePathFromArgs(args: unknown): string | undefined {
+  const keys = ["path", "filePath", "file_path", "imagePath", "image_path", "screenshot"];
+  for (const key of keys) {
+    const value = extractStringArg(args, key);
+    if (value && IMAGE_PATH_RE.test(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function resolveFallbackSummary(input: ToolCallSummaryInput): string | undefined {
+  const explicit = sanitizeSummary(input.fallbackMeta);
+  if (explicit) {
+    return explicit;
+  }
+
+  const toolName = normalizeKey(input.toolName).toLowerCase();
+  if (toolName === "image") {
+    return "Screenshot verwerken";
+  }
+
+  if (toolName === "browser") {
+    const action = extractStringArg(input.args, "action")?.toLowerCase();
+    if (action === "screenshot" || action === "snapshot") {
+      return "Screenshot maken";
+    }
+  }
+
+  if (toolName === "read") {
+    const imagePath = extractImagePathFromArgs(input.args);
+    if (imagePath) {
+      return "Screenshot analyseren";
+    }
+  }
+
+  return undefined;
+}
+
 function setCache(cacheKey: string, value: string): void {
   summaryCache.set(cacheKey, value);
   if (summaryCache.size <= CACHE_MAX_ENTRIES) {
@@ -151,13 +203,15 @@ function setCache(cacheKey: string, value: string): void {
 export async function summarizeToolCallForUser(
   input: ToolCallSummaryInput,
 ): Promise<string | undefined> {
+  const fallbackSummary = resolveFallbackSummary(input);
+
   if (!resolveEnabled()) {
-    return input.fallbackMeta;
+    return fallbackSummary;
   }
 
   const apiKey = resolveApiKey();
   if (!apiKey) {
-    return input.fallbackMeta;
+    return fallbackSummary;
   }
 
   const toolName = normalizeKey(input.toolName);
@@ -182,7 +236,7 @@ export async function summarizeToolCallForUser(
         {
           role: "system",
           content:
-            "You summarize tool calls for chat users. Return one short sentence, factual and specific. Keep 6-14 words. No markdown, no bullet points, no IDs.",
+            "Je vat tool calls samen voor eindgebruikers. Antwoord altijd in natuurlijk Nederlands. Geef precies 1 korte zin (6-14 woorden), feitelijk en specifiek. Geen markdown, geen bullets, geen IDs.",
         },
         {
           role: "user",
@@ -221,19 +275,19 @@ export async function summarizeToolCallForUser(
     });
 
     if (!res.ok) {
-      return input.fallbackMeta;
+      return fallbackSummary;
     }
 
     const raw = (await res.json()) as OpenRouterChatCompletionResponse;
     const content = extractContentText(raw.choices?.[0]?.message?.content);
     const summary = sanitizeSummary(content);
     if (!summary) {
-      return input.fallbackMeta;
+      return fallbackSummary;
     }
     setCache(cacheKey, summary);
     return summary;
   } catch {
-    return input.fallbackMeta;
+    return fallbackSummary;
   } finally {
     clearTimeout(timer);
   }

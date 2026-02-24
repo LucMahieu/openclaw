@@ -50,6 +50,7 @@ describe("summarizeToolCallForUser", () => {
     expect(typeof requestBody).toBe("string");
     const body = JSON.parse(requestBody as string);
     expect(body.model).toBe("nvidia/nemotron-3-nano-30b-a3b:free");
+    expect(String(body.messages?.[0]?.content ?? "")).toContain("natuurlijk Nederlands");
   });
 
   it("falls back when provider returns non-ok response", async () => {
@@ -162,5 +163,15 @@ describe("summarizeToolCallForUser", () => {
     expect((requestInit.headers as Record<string, string>).Authorization).toBe(
       "Bearer sk-or-manual-token",
     );
+  });
+
+  it("returns Dutch screenshot fallback when image tool has no explicit meta", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const summary = await summarizeToolCallForUser({
+      toolName: "image",
+      toolCallId: "t6",
+      args: {},
+    });
+    expect(summary).toBe("Screenshot verwerken");
   });
 });
