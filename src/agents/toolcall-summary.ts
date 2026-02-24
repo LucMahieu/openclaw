@@ -176,7 +176,7 @@ export async function summarizeToolCallForUser(
     const payload = {
       model: resolveModel(),
       temperature: 0,
-      max_tokens: 140,
+      max_tokens: 220,
       reasoning: { exclude: true },
       messages: [
         {
