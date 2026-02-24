@@ -1,0 +1,119 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { summarizeToolCallForUser } from "./toolcall-summary.js";
+
+describe("summarizeToolCallForUser", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("returns fallback when OPENROUTER_API_KEY is missing", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "t1",
+      args: { command: "ls" },
+      fallbackMeta: "list files",
+    });
+    expect(summary).toBe("list files");
+  });
+
+  it("uses OpenRouter summary when available", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "Opent WhatsApp Web en focust op het invoerveld." } }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "t2",
+      args: { command: "run # Open" },
+      fallbackMeta: "run # Open",
+    });
+
+    expect(summary).toBe("Opent WhatsApp Web en focust op het invoerveld.");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const requestBody = requestInit.body;
+    expect(typeof requestBody).toBe("string");
+    const body = JSON.parse(requestBody as string);
+    expect(body.model).toBe("nvidia/nemotron-3-nano-30b-a3b:free");
+  });
+
+  it("falls back when provider returns non-ok response", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "t3",
+      args: { command: "run # Click" },
+      fallbackMeta: "run # Click",
+    });
+
+    expect(summary).toBe("run # Click");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses OpenRouter auth profile key when env key is missing", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-tool-summary-"));
+    vi.stubEnv("OPENCLAW_AGENT_DIR", agentDir);
+    fs.writeFileSync(
+      path.join(agentDir, "auth-profiles.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          profiles: {
+            "openrouter:default": {
+              type: "api_key",
+              provider: "openrouter",
+              key: "sk-or-from-profile",
+            },
+          },
+          order: {
+            openrouter: ["openrouter:default"],
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "Klikt op de knop en vult de invoer in." } }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "t4",
+      args: { command: "run # Klik" },
+      fallbackMeta: "run # Klik",
+    });
+
+    expect(summary).toBe("Klikt op de knop en vult de invoer in.");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((requestInit.headers as Record<string, string>).Authorization).toBe(
+      "Bearer sk-or-from-profile",
+    );
+  });
+});

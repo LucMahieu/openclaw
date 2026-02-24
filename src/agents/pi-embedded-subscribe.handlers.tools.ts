@@ -19,6 +19,7 @@ import {
 import { inferToolMetaFromArgs } from "./pi-embedded-utils.js";
 import { buildToolMutationState, isSameToolMutationAction } from "./tool-mutation.js";
 import { normalizeToolName } from "./tool-policy.js";
+import { summarizeToolCallForUser } from "./toolcall-summary.js";
 
 /** Track tool execution start times and args for after_tool_call hook */
 const toolStartData = new Map<string, { startTime: number; args: unknown }>();
@@ -192,7 +193,20 @@ export async function handleToolExecutionStart(
     !ctx.state.toolSummaryById.has(toolCallId)
   ) {
     ctx.state.toolSummaryById.add(toolCallId);
-    ctx.emitToolSummary(toolName, meta);
+    const summarizedMeta = await summarizeToolCallForUser({
+      runId: ctx.params.runId,
+      toolName,
+      toolCallId,
+      args,
+      fallbackMeta: meta,
+    });
+    const nextMeta = summarizedMeta ?? meta;
+    const summary = ctx.state.toolMetaById.get(toolCallId);
+    if (summary) {
+      summary.meta = nextMeta;
+      ctx.state.toolMetaById.set(toolCallId, summary);
+    }
+    ctx.emitToolSummary(toolName, nextMeta);
   }
 
   // Track messaging tool sends (pending until confirmed in tool_execution_end).

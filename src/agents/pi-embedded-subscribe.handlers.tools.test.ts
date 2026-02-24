@@ -1,5 +1,5 @@
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MessagingToolSend } from "./pi-embedded-messaging.js";
 import {
   handleToolExecutionEnd,
@@ -12,6 +12,11 @@ import type {
 
 type ToolExecutionStartEvent = Extract<AgentEvent, { type: "tool_execution_start" }>;
 type ToolExecutionEndEvent = Extract<AgentEvent, { type: "tool_execution_end" }>;
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 function createTestContext(): {
   ctx: ToolHandlerContext;
@@ -87,6 +92,35 @@ describe("handleToolExecutionStart read path checks", () => {
 
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]?.[0] ?? "")).toContain("read tool called without path");
+  });
+
+  it("uses OpenRouter summary text for emitted tool summary", async () => {
+    const { ctx } = createTestContext();
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    ctx.params.onToolResult = vi.fn();
+    ctx.shouldEmitToolResult = () => true;
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "Opent de browser en selecteert het juiste element." } }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const evt: ToolExecutionStartEvent = {
+      type: "tool_execution_start",
+      toolName: "exec",
+      toolCallId: "tool-openrouter-1",
+      args: { command: "run # Click -> run xsel" },
+    };
+
+    await handleToolExecutionStart(ctx, evt);
+
+    expect(ctx.emitToolSummary).toHaveBeenCalledTimes(1);
+    expect(ctx.emitToolSummary).toHaveBeenCalledWith(
+      "exec",
+      "Opent de browser en selecteert het juiste element.",
+    );
   });
 });
 
