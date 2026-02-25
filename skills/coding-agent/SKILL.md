@@ -291,6 +291,23 @@ cron.add(job={
 3. Check: klaar? → test + rapporteer. Bezig? → nieuwe cron. Crash? → herstart.
 4. Herhaal tot done.
 
+### Push Handshake (verplicht)
+
+Als Codex status heeft, laat Codex direct een push-event sturen:
+
+```bash
+openclaw system event --text 'CODEx_STATUS progress taskId=<taskId> sessionId=<sessionId> summary="running"' --mode now
+openclaw system event --text 'CODEx_STATUS waiting-input taskId=<taskId> sessionId=<sessionId> summary="need user decision"' --mode now
+openclaw system event --text 'CODEx_STATUS done taskId=<taskId> sessionId=<sessionId> summary="implemented + tested"' --mode now
+openclaw system event --text 'CODEx_STATUS error taskId=<taskId> sessionId=<sessionId> summary="failing tests"' --mode now
+```
+
+Fallback als dit command faalt:
+
+- Zet direct een monitor-cron op korte interval (1-2 min)
+- Meld in de chat dat push faalde en watchdog actief blijft
+- Stop pas met monitoren na terminale status
+
 ---
 
 ## Auto-Notify on Completion

@@ -117,6 +117,8 @@ function buildMessagingSection(params: {
     "- Never use exec/curl for provider messaging; OpenClaw handles all routing internally.",
     "- If you ask the user (or any external party) to do something before you can continue, create a cron follow-up immediately in the same turn (default first check: ~1 minute).",
     "- Use cron follow-ups for pending OAuth/login, approvals, awaited replies, long-running external processes, and any blocked handoff.",
+    "- For Codex/sub-agent implementation handoffs, ensure a watchdog cron exists immediately after spawn; recreate it in the same turn if missing.",
+    '- For explicit Codex push updates, use: `CODEx_STATUS <done|waiting-input|blocked|error|progress> taskId=<id> sessionId=<id> summary="..."`.',
     "- When the blocker is resolved, remove or disable no-longer-needed follow-up cron jobs.",
     "- If gateway RPC disconnects/fails mid-task (e.g. close 1006), self-heal in the same turn: run `openclaw gateway status`, restart with `openclaw gateway restart` when probe is unhealthy, then retry once before asking the user.",
     params.availableTools.has("message")
@@ -431,6 +433,7 @@ export function buildAgentSystemPrompt(params: {
     "TOOLS.md does not control tool availability; it is user guidance for how to use external tools.",
     `For long waits, avoid rapid poll loops: use ${execToolName} with enough yieldMs or ${processToolName}(action=poll, timeout=<ms>).`,
     "If a task is more complex or takes longer, spawn a sub-agent. Completion is push-based: it will auto-announce when done.",
+    "For Codex implementation handoffs, keep a watchdog cron active until terminal state (done/cancelled/failed-final).",
     "Do not poll `subagents list` / `sessions_list` in a loop; only check status on-demand (for intervention, debugging, or when explicitly asked).",
     "",
     "## Tool Call Style",

@@ -293,6 +293,22 @@ export const FIELD_HELP: Record<string, string> = {
   "agents.defaults.imageMaxDimensionPx":
     "Max image side length in pixels when sanitizing transcript/tool-result image payloads (default: 1200).",
   "agents.defaults.cliBackends": "Optional CLI backends for text-only fallback (claude-cli, etc.).",
+  "agents.defaults.selfImprovement":
+    "Self-improvement orchestration settings for Codex handoff and watchdog behavior.",
+  "agents.defaults.selfImprovement.handoff.monitorEnabled":
+    "Enable Codex handoff watchdog monitoring (default: true).",
+  "agents.defaults.selfImprovement.handoff.monitorIntervalSeconds":
+    "Watchdog check interval in seconds (default: 120).",
+  "agents.defaults.selfImprovement.handoff.monitorMaxAttempts":
+    "Maximum monitor attempts before terminal failure (default: 90).",
+  "agents.defaults.selfImprovement.handoff.staleTimeoutSeconds":
+    "No-progress timeout in seconds before a task is considered stale (default: 600).",
+  "agents.defaults.selfImprovement.handoff.requirePushAck":
+    "Require explicit CODEx_STATUS push events for completion certainty (default: true).",
+  "agents.defaults.selfImprovement.handoff.autoRescheduleOnInFlight":
+    "When true, keep watchdog monitors active while tasks are in-flight (default: true).",
+  "agents.defaults.selfImprovement.handoff.retryBackoffSeconds":
+    "Retry backoff schedule (seconds) for stale/error recovery (default: [60,120,300]).",
   "agents.defaults.humanDelay.mode": 'Delay style for block replies ("off", "natural", "custom").',
   "agents.defaults.humanDelay.minMs": "Minimum delay in ms for custom humanDelay (default: 800).",
   "agents.defaults.humanDelay.maxMs": "Maximum delay in ms for custom humanDelay (default: 2500).",

@@ -5,8 +5,22 @@ import {
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
 } from "../agents/agent-scope.js";
+import {
+  parseCodexStatusEvent,
+  parseCodexWatchdogEvent,
+} from "../agents/codex-handoff/event-parser.js";
+import { removeCodexMonitorCron } from "../agents/codex-handoff/scheduler.js";
+import {
+  bumpCodexHandoffAttempt,
+  classifyCodexHandoffStaleness,
+  getCodexHandoffTask,
+  markCodexHandoffHeartbeat,
+  markCodexHandoffPhase,
+  resolveCodexHandoffConfig,
+} from "../agents/codex-handoff/tracker.js";
 import { appendCronStyleCurrentTimeLine } from "../agents/current-time.js";
 import { resolveEffectiveMessagesConfig } from "../agents/identity.js";
+import { getSubagentRunRecord } from "../agents/subagent-registry.js";
 import { DEFAULT_HEARTBEAT_FILENAME } from "../agents/workspace.js";
 import { resolveHeartbeatReplyPayload } from "../auto-reply/heartbeat-reply-payload.js";
 import {
@@ -63,7 +77,7 @@ import {
   resolveHeartbeatDeliveryTarget,
   resolveHeartbeatSenderContext,
 } from "./outbound/targets.js";
-import { peekSystemEventEntries } from "./system-events.js";
+import { enqueueSystemEvent, peekSystemEventEntries } from "./system-events.js";
 
 export type HeartbeatDeps = OutboundSendDeps &
   ChannelHeartbeatDeps & {
@@ -500,6 +514,106 @@ function resolveHeartbeatReasonFlags(reason?: string): HeartbeatReasonFlags {
   };
 }
 
+async function processCodexHandoffEvents(params: {
+  cfg: OpenClawConfig;
+  sessionKey: string;
+  pendingEventEntries: ReturnType<typeof peekSystemEventEntries>;
+}) {
+  const handoffCfg = resolveCodexHandoffConfig(params.cfg);
+  if (!handoffCfg.monitorEnabled) {
+    return;
+  }
+
+  for (const entry of params.pendingEventEntries) {
+    const statusEvent = parseCodexStatusEvent(entry.text);
+    if (statusEvent) {
+      const taskId = statusEvent.taskId ?? statusEvent.sessionId;
+      if (!taskId) {
+        continue;
+      }
+      const updated = markCodexHandoffPhase({
+        taskId,
+        phase: statusEvent.phase,
+        summary: statusEvent.summary,
+        atMs: entry.ts,
+      });
+      if (updated?.terminal) {
+        await removeCodexMonitorCron(updated.taskId, params.cfg);
+      } else if (updated?.phase === "waiting-input") {
+        enqueueSystemEvent(
+          `Codex task ${updated.taskId} wacht op user input. Stel een concrete vraag en houd monitoring actief.`,
+          { sessionKey: params.sessionKey, contextKey: `codex-handoff:${updated.taskId}` },
+        );
+      }
+      continue;
+    }
+
+    const watchdogEvent = parseCodexWatchdogEvent(entry.text);
+    if (!watchdogEvent?.taskId) {
+      continue;
+    }
+    const task = getCodexHandoffTask(watchdogEvent.taskId);
+    if (!task) {
+      continue;
+    }
+
+    markCodexHandoffHeartbeat(task.taskId, entry.ts);
+    if (task.terminal) {
+      await removeCodexMonitorCron(task.taskId, params.cfg);
+      continue;
+    }
+
+    const run = getSubagentRunRecord(task.runId);
+    if (run) {
+      if (typeof run.endedAt === "number") {
+        const phase = run.outcome?.status === "ok" ? "done" : "failed";
+        markCodexHandoffPhase({
+          taskId: task.taskId,
+          phase,
+          summary: run.outcome?.error,
+          atMs: run.endedAt,
+        });
+        await removeCodexMonitorCron(task.taskId, params.cfg);
+        continue;
+      }
+      markCodexHandoffPhase({ taskId: task.taskId, phase: "running", atMs: entry.ts });
+    }
+
+    const refreshedTask = getCodexHandoffTask(task.taskId);
+    if (!refreshedTask || refreshedTask.terminal) {
+      continue;
+    }
+
+    bumpCodexHandoffAttempt(
+      refreshedTask.taskId,
+      Date.now() + handoffCfg.monitorIntervalSeconds * 1000,
+    );
+
+    if (refreshedTask.attempt >= handoffCfg.monitorMaxAttempts) {
+      markCodexHandoffPhase({
+        taskId: refreshedTask.taskId,
+        phase: "failed",
+        summary: "monitor attempts exhausted",
+      });
+      enqueueSystemEvent(
+        `Codex task ${refreshedTask.taskId} exceeded monitor attempts and is marked failed-final.`,
+        { sessionKey: params.sessionKey, contextKey: `codex-handoff:${refreshedTask.taskId}` },
+      );
+      await removeCodexMonitorCron(refreshedTask.taskId, params.cfg);
+      continue;
+    }
+
+    const staleness = classifyCodexHandoffStaleness(refreshedTask, params.cfg);
+    if (staleness === "stale") {
+      markCodexHandoffPhase({ taskId: refreshedTask.taskId, phase: "stale" });
+      enqueueSystemEvent(
+        `Codex task ${refreshedTask.taskId} lijkt vast te zitten (stale). Ik blijf monitoren en stuur bij.`,
+        { sessionKey: params.sessionKey, contextKey: `codex-handoff:${refreshedTask.taskId}` },
+      );
+    }
+  }
+}
+
 async function resolveHeartbeatPreflight(params: {
   cfg: OpenClawConfig;
   agentId: string;
@@ -645,6 +759,11 @@ export async function runHeartbeatOnce(opts: {
   // If so, use a specialized prompt that instructs the model to relay the result
   // instead of the standard heartbeat prompt with "reply HEARTBEAT_OK".
   const shouldInspectPendingEvents = preflight.shouldInspectPendingEvents;
+  await processCodexHandoffEvents({
+    cfg,
+    sessionKey,
+    pendingEventEntries,
+  });
   const pendingEvents = shouldInspectPendingEvents
     ? pendingEventEntries.map((event) => event.text)
     : [];

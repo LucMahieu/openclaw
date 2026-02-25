@@ -2,9 +2,12 @@ import crypto from "node:crypto";
 import { formatThinkingLevels, normalizeThinkLevel } from "../auto-reply/thinking.js";
 import { loadConfig } from "../config/config.js";
 import { callGateway } from "../gateway/call.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { normalizeAgentId, parseAgentSessionKey } from "../routing/session-key.js";
 import { normalizeDeliveryContext } from "../utils/delivery-context.js";
 import { resolveAgentConfig } from "./agent-scope.js";
+import { ensureCodexMonitorCron } from "./codex-handoff/scheduler.js";
+import { registerCodexHandoffTask } from "./codex-handoff/tracker.js";
 import { AGENT_LANE_SUBAGENT } from "./lanes.js";
 import { resolveSubagentSpawnModelSelection } from "./model-selection.js";
 import { buildSubagentSystemPrompt } from "./subagent-announce.js";
@@ -42,6 +45,8 @@ export type SpawnSubagentContext = {
 
 export const SUBAGENT_SPAWN_ACCEPTED_NOTE =
   "auto-announces on completion, do not poll/sleep. The response will be sent back as an user message.";
+
+const log = createSubsystemLogger("agent/codex-handoff");
 
 export type SpawnSubagentResult = {
   status: "accepted" | "forbidden" | "error";
@@ -294,6 +299,24 @@ export async function spawnSubagentDirect(
     runTimeoutSeconds,
     expectsCompletionMessage: params.expectsCompletionMessage === true,
   });
+
+  // Register watchdog metadata and ensure recurring monitor cron exists.
+  try {
+    registerCodexHandoffTask({
+      taskId: childRunId,
+      runId: childRunId,
+      childSessionKey,
+      requesterSessionKey: requesterInternalKey,
+      agentId: targetAgentId,
+      summary: task,
+      config: cfg,
+    });
+    void ensureCodexMonitorCron(childRunId, cfg).catch((err) => {
+      log.warn(`Failed to schedule codex monitor cron for ${childRunId}: ${String(err)}`);
+    });
+  } catch (err) {
+    log.warn(`Failed to register codex handoff task for ${childRunId}: ${String(err)}`);
+  }
 
   return {
     status: "accepted",
