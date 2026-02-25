@@ -5,7 +5,7 @@ import {
   resolveAuthProfileOrder,
 } from "./auth-profiles.js";
 
-const DEFAULT_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free";
+const DEFAULT_MODEL = "openai/gpt-5-nano";
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_TIMEOUT_MS = 6000;
 const DEFAULT_RETRY_BACKOFF_MS = [200, 700];

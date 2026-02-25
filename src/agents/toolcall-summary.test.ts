@@ -54,7 +54,7 @@ describe("summarizeToolCallForUser", () => {
     const requestBody = requestInit.body;
     expect(typeof requestBody).toBe("string");
     const body = JSON.parse(requestBody as string);
-    expect(body.model).toBe("nvidia/nemotron-3-nano-30b-a3b:free");
+    expect(body.model).toBe("openai/gpt-5-nano");
     expect(String(body.messages?.[0]?.content ?? "")).toContain("agent-progress verb");
   });
 
