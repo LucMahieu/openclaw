@@ -150,5 +150,12 @@ function maybeWrapMarkdown(value: string, markdown?: boolean): string {
 
 function shouldHideToolLabel(toolName?: string): boolean {
   const normalized = (toolName ?? "").trim().toLowerCase();
-  return normalized === "exec" || normalized === "bash" || normalized === "image";
+  return (
+    normalized === "exec" ||
+    normalized === "bash" ||
+    normalized === "image" ||
+    normalized === "process" ||
+    normalized === "cron" ||
+    normalized === "sessions_spawn"
+  );
 }

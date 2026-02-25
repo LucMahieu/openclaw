@@ -63,5 +63,11 @@ describe("tool meta formatting", () => {
     expect(formatToolPrefix("exec", "Running a command in terminal.")).toBe(
       "💻 Running a command in terminal.",
     );
+    expect(formatToolPrefix("process", "Checking process keen-shell for new output.")).toBe(
+      "🧰 Checking process keen-shell for new output.",
+    );
+    expect(formatToolPrefix("cron", 'Scheduling cron job "resume-notion" every 2m.')).toBe(
+      '⏰ Scheduling cron job "resume-notion" every 2m.',
+    );
   });
 });

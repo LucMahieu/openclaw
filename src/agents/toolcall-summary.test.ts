@@ -73,7 +73,7 @@ describe("summarizeToolCallForUser", () => {
     });
 
     expect(summary).toBe("Running # Click");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("uses OpenRouter auth profile key when env key is missing", async () => {
@@ -223,5 +223,62 @@ describe("summarizeToolCallForUser", () => {
 
     expect(summary).toBe("Analyzing image for button coordinates.");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries after timeout-like failure and recovers", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    vi.stubEnv("OPENCLAW_TOOL_SUMMARY_RETRY_BACKOFF_MS", "0,0");
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("tool summary timeout"))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [
+            { finish_reason: "stop", message: { content: "Running a command in terminal." } },
+          ],
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "t9",
+      args: { command: "pwd" },
+      fallbackMeta: "run pwd",
+    });
+
+    expect(summary).toBe("Running a command in terminal.");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses natural process fallback summary instead of raw detail", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const summary = await summarizeToolCallForUser({
+      toolName: "process",
+      toolCallId: "t10",
+      args: { action: "poll", sessionId: "keen-shell", timeout: 5000 },
+      fallbackMeta: "session keen-shell",
+    });
+
+    expect(summary).toBe("Checking process keen-shell for new output over 5s.");
+  });
+
+  it("uses natural cron fallback summary with schedule context", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const summary = await summarizeToolCallForUser({
+      toolName: "cron",
+      toolCallId: "t11",
+      args: {
+        action: "add",
+        job: {
+          name: "resume-notion",
+          schedule: { kind: "every", everyMs: 120000 },
+        },
+      },
+      fallbackMeta: "add job",
+    });
+
+    expect(summary).toBe('Scheduling cron job "resume-notion" every 2m.');
   });
 });
