@@ -23,6 +23,7 @@ import {
   resolveChatRunExpiresAtMs,
 } from "../chat-abort.js";
 import { type ChatImageContent, parseMessageWithAttachments } from "../chat-attachments.js";
+import { clearGatewayChatRunInFlight, markGatewayChatRunInFlight } from "../chat-run-recovery.js";
 import { stripEnvelopeFromMessages } from "../chat-sanitize.js";
 import { GATEWAY_CLIENT_CAPS, hasGatewayClientCap } from "../protocol/client-info.js";
 import {
@@ -855,6 +856,7 @@ export const chatHandlers: GatewayRequestHandlers = {
         startedAtMs: now,
         expiresAtMs: resolveChatRunExpiresAtMs({ now, timeoutMs }),
       });
+      markGatewayChatRunInFlight({ runId: clientRunId, sessionKey });
       const ackPayload = {
         runId: clientRunId,
         status: "started" as const,
@@ -1021,6 +1023,7 @@ export const chatHandlers: GatewayRequestHandlers = {
         })
         .finally(() => {
           context.chatAbortControllers.delete(clientRunId);
+          clearGatewayChatRunInFlight(clientRunId);
         });
     } catch (err) {
       const error = errorShape(ErrorCodes.UNAVAILABLE, String(err));
