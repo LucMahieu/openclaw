@@ -66,6 +66,7 @@ export type EmbeddedPiSubscribeState = {
   compactionRetryResolve?: () => void;
   compactionRetryReject?: (reason?: unknown) => void;
   compactionRetryPromise: Promise<void> | null;
+  pendingToolHandlerTasks: Set<Promise<void>>;
   unsubscribed: boolean;
 
   messagingToolSentTexts: string[];
@@ -90,8 +91,8 @@ export type EmbeddedPiSubscribeContext = {
 
   shouldEmitToolResult: () => boolean;
   shouldEmitToolOutput: () => boolean;
-  emitToolSummary: (toolName?: string, meta?: string) => void;
-  emitToolOutput: (toolName?: string, meta?: string, output?: string) => void;
+  emitToolSummary: (toolName?: string, meta?: string) => Promise<void>;
+  emitToolOutput: (toolName?: string, meta?: string, output?: string) => Promise<void>;
   stripBlockTags: (
     text: string,
     state: { thinking: boolean; final: boolean; inlineCode?: InlineCodeState },
@@ -123,6 +124,9 @@ export type EmbeddedPiSubscribeContext = {
   incrementCompactionCount: () => void;
   getUsageTotals: () => NormalizedUsage | undefined;
   getCompactionCount: () => number;
+  isSubscriptionClosed: () => boolean;
+  trackToolHandlerTask: (promise: Promise<unknown>) => void;
+  waitForToolHandlerTasks: () => Promise<void>;
 };
 
 /**
@@ -141,6 +145,7 @@ export type ToolHandlerState = Pick<
   | "toolMetas"
   | "toolSummaryById"
   | "lastToolError"
+  | "unsubscribed"
   | "pendingMessagingTargets"
   | "pendingMessagingTexts"
   | "pendingMessagingMediaUrls"
@@ -159,9 +164,10 @@ export type ToolHandlerContext = {
   flushBlockReplyBuffer: () => void;
   shouldEmitToolResult: () => boolean;
   shouldEmitToolOutput: () => boolean;
-  emitToolSummary: (toolName?: string, meta?: string) => void;
-  emitToolOutput: (toolName?: string, meta?: string, output?: string) => void;
+  emitToolSummary: (toolName?: string, meta?: string) => Promise<void>;
+  emitToolOutput: (toolName?: string, meta?: string, output?: string) => Promise<void>;
   trimMessagingToolSent: () => void;
+  isSubscriptionClosed: () => boolean;
 };
 
 export type EmbeddedPiSubscribeEvent =

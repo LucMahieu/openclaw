@@ -206,7 +206,7 @@ export async function handleToolExecutionStart(
       summary.meta = nextMeta;
       ctx.state.toolMetaById.set(toolCallId, summary);
     }
-    ctx.emitToolSummary(toolName, nextMeta);
+    await ctx.emitToolSummary(toolName, nextMeta);
   }
 
   // Track messaging tool sends (pending until confirmed in tool_execution_end).
@@ -387,7 +387,7 @@ export async function handleToolExecutionEnd(
   if (ctx.params.onToolResult && ctx.shouldEmitToolOutput()) {
     const outputText = extractToolResultText(sanitizedResult);
     if (outputText) {
-      ctx.emitToolOutput(toolName, meta, outputText);
+      await ctx.emitToolOutput(toolName, meta, outputText);
     }
   }
 
@@ -398,7 +398,9 @@ export async function handleToolExecutionEnd(
     const mediaPaths = extractToolResultMediaPaths(result);
     if (mediaPaths.length > 0) {
       try {
-        void ctx.params.onToolResult({ mediaUrls: mediaPaths });
+        if (!ctx.isSubscriptionClosed()) {
+          await ctx.params.onToolResult({ mediaUrls: mediaPaths });
+        }
       } catch {
         // ignore delivery failures
       }

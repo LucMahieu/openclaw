@@ -42,6 +42,7 @@ function createTestContext(): {
       toolMetaById: new Map<string, ToolCallSummary>(),
       toolMetas: [],
       toolSummaryById: new Set<string>(),
+      unsubscribed: false,
       pendingMessagingTargets: new Map<string, MessagingToolSend>(),
       pendingMessagingTexts: new Map<string, string>(),
       pendingMessagingMediaUrls: new Map<string, string[]>(),
@@ -53,9 +54,10 @@ function createTestContext(): {
     },
     shouldEmitToolResult: () => false,
     shouldEmitToolOutput: () => false,
-    emitToolSummary: vi.fn(),
-    emitToolOutput: vi.fn(),
+    emitToolSummary: vi.fn(async () => {}),
+    emitToolOutput: vi.fn(async () => {}),
     trimMessagingToolSent: vi.fn(),
+    isSubscriptionClosed: () => false,
   };
 
   return { ctx, warn, onBlockReplyFlush };

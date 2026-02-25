@@ -252,6 +252,53 @@ describe("summarizeToolCallForUser", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("uses a fresh timeout scope per retry attempt after abort timeout", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    vi.stubEnv("OPENCLAW_TOOL_SUMMARY_ATTEMPT_TIMEOUT_MS", "500");
+    vi.stubEnv("OPENCLAW_TOOL_SUMMARY_RETRY_BACKOFF_MS", "0,0");
+
+    const attemptSignalsAborted: boolean[] = [];
+    const fetchMock = vi.fn((_: string, init?: RequestInit) => {
+      const attemptIndex = fetchMock.mock.calls.length;
+      const signal = init?.signal as AbortSignal | undefined;
+      attemptSignalsAborted.push(Boolean(signal?.aborted));
+      if (attemptIndex === 1) {
+        return new Promise<unknown>((_resolve, reject) => {
+          signal?.addEventListener(
+            "abort",
+            () => {
+              reject(new Error("tool summary timeout"));
+            },
+            { once: true },
+          );
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          choices: [
+            {
+              finish_reason: "stop",
+              message: { content: "Running second attempt after timeout." },
+            },
+          ],
+        }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "t9b",
+      args: { command: "echo fresh-timeout-scope" },
+      fallbackMeta: "run fresh timeout scope",
+    });
+
+    expect(summary).toBe("Running second attempt after timeout.");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(attemptSignalsAborted).toEqual([false, false]);
+  });
+
   it("uses natural process fallback summary instead of raw detail", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "");
     const summary = await summarizeToolCallForUser({
@@ -280,5 +327,86 @@ describe("summarizeToolCallForUser", () => {
     });
 
     expect(summary).toBe('Scheduling cron job "resume-notion" every 2m.');
+  });
+
+  it("falls back after repeated timeout errors (hypothesis: timeout)", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    vi.stubEnv("OPENCLAW_TOOL_SUMMARY_RETRY_BACKOFF_MS", "0,0");
+    const fetchMock = vi.fn().mockRejectedValue(new Error("tool summary timeout"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "h-timeout",
+      args: { command: "echo timeout" },
+      fallbackMeta: "run timeout probe",
+    });
+
+    expect(summary).toBe("Running timeout probe");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("falls back after repeated empty length responses (hypothesis: finish_reason=length)", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    vi.stubEnv("OPENCLAW_TOOL_SUMMARY_RETRY_BACKOFF_MS", "0,0");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ finish_reason: "length", message: { content: "" } }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "h-empty-length",
+      args: { command: "echo empty-length" },
+      fallbackMeta: "run empty length probe",
+    });
+
+    expect(summary).toBe("Running empty length probe");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("falls back after repeated empty stop responses (hypothesis: no content)", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    vi.stubEnv("OPENCLAW_TOOL_SUMMARY_RETRY_BACKOFF_MS", "0,0");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ finish_reason: "stop", message: { content: "" } }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "h-empty-stop",
+      args: { command: "echo empty-stop" },
+      fallbackMeta: "run empty stop probe",
+    });
+
+    expect(summary).toBe("Running empty stop probe");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not retry on non-retriable HTTP status (hypothesis: something else)", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    vi.stubEnv("OPENCLAW_TOOL_SUMMARY_RETRY_BACKOFF_MS", "0,0");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "exec",
+      toolCallId: "h-http-400",
+      args: { command: "echo bad-request" },
+      fallbackMeta: "run bad request probe",
+    });
+
+    expect(summary).toBe("Running bad request probe");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -784,6 +784,7 @@ export async function runEmbeddedAttempt(
         toolMetas,
         unsubscribe,
         waitForCompactionRetry,
+        waitForToolHandlerTasks,
         getMessagingToolSentTexts,
         getMessagingToolSentMediaUrls,
         getMessagingToolSentTargets,
@@ -1084,6 +1085,10 @@ export async function runEmbeddedAttempt(
             throw err;
           }
         }
+
+        // Tool summaries and output callbacks are async; drain them before returning
+        // so downstream channels cannot emit final reply before late tool updates.
+        await waitForToolHandlerTasks();
 
         // Append cache-TTL timestamp AFTER prompt + compaction retry completes.
         // Previously this was before the prompt, which caused a custom entry to be

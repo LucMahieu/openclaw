@@ -319,6 +319,8 @@ export async function dispatchReplyFromConfig(params: {
     // TTS audio separately from the accumulated block content.
     let accumulatedBlockText = "";
     let blockCount = 0;
+    let lastToolResultSentAt: number | undefined;
+    let finalReplySentAt: number | undefined;
 
     const shouldSendToolSummaries = ctx.ChatType !== "group" && ctx.CommandSource !== "native";
 
@@ -357,6 +359,14 @@ export async function dispatchReplyFromConfig(params: {
               await sendPayloadAsync(deliveryPayload, undefined, false);
             } else {
               dispatcher.sendToolResult(deliveryPayload);
+            }
+            const toolSummarySentAt = Date.now();
+            lastToolResultSentAt = toolSummarySentAt;
+            if (finalReplySentAt) {
+              const orderingLagMs = toolSummarySentAt - finalReplySentAt;
+              logVerbose(
+                `dispatch ordering late-tool: sessionKey=${ctx.SessionKey} toolSummarySentAt=${toolSummarySentAt} finalReplySentAt=${finalReplySentAt} orderingLagMs=${orderingLagMs}`,
+              );
             }
           };
           return run();
@@ -423,9 +433,26 @@ export async function dispatchReplyFromConfig(params: {
         queuedFinal = result.ok || queuedFinal;
         if (result.ok) {
           routedFinalCount += 1;
+          finalReplySentAt = Date.now();
+          const orderingLagMs = (lastToolResultSentAt ?? finalReplySentAt) - finalReplySentAt;
+          logVerbose(
+            `dispatch ordering final: sessionKey=${ctx.SessionKey} finalReplySentAt=${finalReplySentAt} lastToolSummarySentAt=${
+              lastToolResultSentAt ?? "none"
+            } orderingLagMs=${orderingLagMs}`,
+          );
         }
       } else {
-        queuedFinal = dispatcher.sendFinalReply(ttsReply) || queuedFinal;
+        const didQueueFinal = dispatcher.sendFinalReply(ttsReply);
+        queuedFinal = didQueueFinal || queuedFinal;
+        if (didQueueFinal) {
+          finalReplySentAt = Date.now();
+          const orderingLagMs = (lastToolResultSentAt ?? finalReplySentAt) - finalReplySentAt;
+          logVerbose(
+            `dispatch ordering final: sessionKey=${ctx.SessionKey} finalReplySentAt=${finalReplySentAt} lastToolSummarySentAt=${
+              lastToolResultSentAt ?? "none"
+            } orderingLagMs=${orderingLagMs}`,
+          );
+        }
       }
     }
 

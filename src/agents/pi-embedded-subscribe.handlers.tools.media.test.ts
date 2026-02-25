@@ -21,6 +21,8 @@ function createMockContext(overrides?: {
       toolMetaById: new Map(),
       toolMetas: [],
       toolSummaryById: new Set(),
+      pendingToolHandlerTasks: new Set(),
+      unsubscribed: false,
       pendingMessagingTexts: new Map(),
       pendingMessagingTargets: new Map(),
       pendingMessagingMediaUrls: new Map(),
@@ -28,12 +30,13 @@ function createMockContext(overrides?: {
       messagingToolSentTextsNormalized: [],
       messagingToolSentMediaUrls: [],
       messagingToolSentTargets: [],
+      successfulCronAdds: 0,
     },
     log: { debug: vi.fn(), warn: vi.fn() },
     shouldEmitToolResult: vi.fn(() => false),
     shouldEmitToolOutput: vi.fn(() => overrides?.shouldEmitToolOutput ?? false),
-    emitToolSummary: vi.fn(),
-    emitToolOutput: vi.fn(),
+    emitToolSummary: vi.fn(async () => {}),
+    emitToolOutput: vi.fn(async () => {}),
     trimMessagingToolSent: vi.fn(),
     hookRunner: undefined,
     // Fill in remaining required fields with no-ops.
@@ -56,6 +59,9 @@ function createMockContext(overrides?: {
     incrementCompactionCount: vi.fn(),
     getUsageTotals: vi.fn(() => undefined),
     getCompactionCount: vi.fn(() => 0),
+    isSubscriptionClosed: vi.fn(() => false),
+    trackToolHandlerTask: vi.fn(),
+    waitForToolHandlerTasks: vi.fn(async () => {}),
   } as unknown as EmbeddedPiSubscribeContext;
 }
 

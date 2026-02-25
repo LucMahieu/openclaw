@@ -7,8 +7,10 @@ import {
 
 const DEFAULT_MODEL = "openai/gpt-5-nano";
 const DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
-const DEFAULT_TIMEOUT_MS = 6000;
+const DEFAULT_ATTEMPT_TIMEOUT_MS = 6000;
+const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_RETRY_BACKOFF_MS = [200, 700];
+const DEFAULT_MAX_TOKENS_PLAN = [220, 420, 520, 620, 720];
 const MAX_RESPONSE_CHARS = 180;
 const CACHE_MAX_ENTRIES = 200;
 const log = createSubsystemLogger("agent/toolcall-summary");
@@ -116,12 +118,25 @@ function resolveBaseUrl(): string {
   return (raw || DEFAULT_BASE_URL).replace(/\/$/, "");
 }
 
-function resolveTimeoutMs(): number {
-  const raw = Number.parseInt(process.env.OPENCLAW_TOOL_SUMMARY_TIMEOUT_MS ?? "", 10);
+function resolveAttemptTimeoutMs(): number {
+  const raw = Number.parseInt(
+    process.env.OPENCLAW_TOOL_SUMMARY_ATTEMPT_TIMEOUT_MS ??
+      process.env.OPENCLAW_TOOL_SUMMARY_TIMEOUT_MS ??
+      "",
+    10,
+  );
   if (!Number.isFinite(raw) || raw <= 0) {
-    return DEFAULT_TIMEOUT_MS;
+    return DEFAULT_ATTEMPT_TIMEOUT_MS;
   }
   return Math.max(500, Math.min(raw, 15000));
+}
+
+function resolveMaxAttempts(): number {
+  const raw = Number.parseInt(process.env.OPENCLAW_TOOL_SUMMARY_MAX_ATTEMPTS ?? "", 10);
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return DEFAULT_MAX_ATTEMPTS;
+  }
+  return Math.max(1, Math.min(raw, DEFAULT_MAX_TOKENS_PLAN.length));
 }
 
 function resolveRetryBackoffMs(): number[] {
@@ -479,13 +494,16 @@ export async function summarizeToolCallForUser(
     return cached;
   }
 
-  const timeoutMs = resolveTimeoutMs();
+  const attemptTimeoutMs = resolveAttemptTimeoutMs();
+  const maxAttempts = resolveMaxAttempts();
   const retryBackoffMs = resolveRetryBackoffMs();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new Error("tool summary timeout")), timeoutMs);
-
-  try {
-    const requestSummary = async (maxTokens: number): Promise<SummaryAttemptResult> => {
+  const requestSummary = async (maxTokens: number): Promise<SummaryAttemptResult> => {
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(new Error("tool summary timeout")),
+      attemptTimeoutMs,
+    );
+    try {
       const payload = {
         model: resolveModel(),
         temperature: 0,
@@ -543,30 +561,42 @@ export async function summarizeToolCallForUser(
       const finishReason = raw.choices?.[0]?.finish_reason;
       const summary = sanitizeSummary(normalizeProgressiveLead(content));
       return { ok: true, summary, finishReason, reason: summary ? undefined : "empty" };
-    };
-    const maxTokensPlan = [220, 420, 520];
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  try {
+    const maxTokensPlan = DEFAULT_MAX_TOKENS_PLAN.slice(0, maxAttempts);
     let lastReason = "unknown";
     for (let i = 0; i < maxTokensPlan.length; i += 1) {
       const maxTokens = maxTokensPlan[i];
       let attempt: SummaryAttemptResult;
+      const attemptStartedAt = Date.now();
       try {
         attempt = await requestSummary(maxTokens);
       } catch (err) {
-        const timeoutLike =
-          controller.signal.aborted || (err instanceof Error && /abort|timeout/i.test(err.message));
+        const timeoutLike = err instanceof Error && /abort|timeout/i.test(err.message);
         attempt = { ok: false, reason: timeoutLike ? "timeout" : "network" };
       }
+      const elapsedMs = Date.now() - attemptStartedAt;
 
       if (!attempt.summary && attempt.finishReason?.toLowerCase() === "length") {
         attempt.reason = "empty_length";
       }
+      log.debug(
+        `tool summary attempt: tool=${toolName} call=${toolCallId} attempt=${i + 1}/${maxAttempts} status=${
+          attempt.summary ? "ok" : "fallback"
+        } reason=${attempt.reason ?? "ok"} finishReason=${
+          attempt.finishReason ?? "none"
+        } elapsedMs=${elapsedMs} timeoutMs=${attemptTimeoutMs}`,
+      );
       if (attempt.summary) {
         setCache(cacheKey, attempt.summary);
         if (i > 0) {
           log.debug(
             `tool summary recovered after retry: tool=${toolName} call=${toolCallId} attempt=${
               i + 1
-            } timeoutMs=${timeoutMs}`,
+            } timeoutMs=${attemptTimeoutMs}`,
           );
         }
         return attempt.summary;
@@ -584,7 +614,7 @@ export async function summarizeToolCallForUser(
     }
 
     log.debug(
-      `tool summary fallback: tool=${toolName} call=${toolCallId} reason=${lastReason} timeoutMs=${timeoutMs}`,
+      `tool summary fallback: tool=${toolName} call=${toolCallId} reason=${lastReason} attempts=${maxAttempts} timeoutMs=${attemptTimeoutMs}`,
     );
     return fallbackSummary;
   } catch (err) {
@@ -594,7 +624,5 @@ export async function summarizeToolCallForUser(
       )}`,
     );
     return fallbackSummary;
-  } finally {
-    clearTimeout(timer);
   }
 }
