@@ -22,6 +22,7 @@ import {
   recordSessionMetaFromInbound,
   resolveStorePath,
 } from "../../../config/sessions.js";
+import { clearRunInFlight, markRunInFlight } from "../../../gateway/chat-run-recovery.js";
 import { logVerbose, shouldLogVerbose } from "../../../globals.js";
 import type { getChildLogger } from "../../../logging.js";
 import { getAgentScopedMediaLocalRoots } from "../../../media/local-roots.js";
@@ -251,6 +252,7 @@ export async function processMessage(params: {
     accountId: params.route.accountId,
   });
   const mediaLocalRoots = getAgentScopedMediaLocalRoots(params.cfg, params.route.agentId);
+  const runId = newConnectionId();
   let didLogHeartbeatStrip = false;
   let didSendReply = false;
   const commandAuthorized = shouldComputeCommandAuthorized(params.msg.body, params.cfg)
@@ -351,76 +353,92 @@ export async function processMessage(params: {
   });
   trackBackgroundTask(params.backgroundTasks, metaTask);
 
-  const { queuedFinal } = await dispatchReplyWithBufferedBlockDispatcher({
-    ctx: ctxPayload,
-    cfg: params.cfg,
-    replyResolver: params.replyResolver,
-    dispatcherOptions: {
-      ...prefixOptions,
-      responsePrefix,
-      onHeartbeatStrip: () => {
-        if (!didLogHeartbeatStrip) {
-          didLogHeartbeatStrip = true;
-          logVerbose("Stripped stray HEARTBEAT_OK token from web reply");
-        }
-      },
-      deliver: async (payload: ReplyPayload, info) => {
-        await deliverWebReply({
-          replyResult: payload,
-          msg: params.msg,
-          mediaLocalRoots,
-          maxMediaBytes: params.maxMediaBytes,
-          textLimit,
-          chunkMode,
-          replyLogger: params.replyLogger,
-          connectionId: params.connectionId,
-          // Tool + block updates are noisy; skip their log lines.
-          skipLog: info.kind !== "final",
-          tableMode,
-        });
-        didSendReply = true;
-        if (info.kind === "tool") {
-          params.rememberSentText(payload.text, {});
-          return;
-        }
-        const shouldLog = info.kind === "final" && payload.text ? true : undefined;
-        params.rememberSentText(payload.text, {
-          combinedBody,
-          combinedBodySessionKey: params.route.sessionKey,
-          logVerboseMessage: shouldLog,
-        });
-        if (info.kind === "final") {
-          const fromDisplay =
-            params.msg.chatType === "group" ? conversationId : (params.msg.from ?? "unknown");
-          const hasMedia = Boolean(payload.mediaUrl || payload.mediaUrls?.length);
-          whatsappOutboundLog.info(`Auto-replied to ${fromDisplay}${hasMedia ? " (media)" : ""}`);
-          if (shouldLogVerbose()) {
-            const preview = payload.text != null ? elide(payload.text, 400) : "<media>";
-            whatsappOutboundLog.debug(`Reply body: ${preview}${hasMedia ? " (media)" : ""}`);
-          }
-        }
-      },
-      onError: (err, info) => {
-        const label =
-          info.kind === "tool"
-            ? "tool update"
-            : info.kind === "block"
-              ? "block update"
-              : "auto-reply";
-        whatsappOutboundLog.error(
-          `Failed sending web ${label} to ${params.msg.from ?? conversationId}: ${formatError(err)}`,
-        );
-      },
-      onReplyStart: params.msg.sendComposing,
-    },
-    replyOptions: {
-      disableBlockStreaming:
-        typeof params.cfg.channels?.whatsapp?.blockStreaming === "boolean"
-          ? !params.cfg.channels.whatsapp.blockStreaming
-          : undefined,
-      onModelSelected,
-    },
+  markRunInFlight({
+    runId,
+    sessionKey: params.route.sessionKey,
+    source: "whatsapp_auto_reply",
+    accountId: params.route.accountId,
   });
+
+  const { queuedFinal } = await (async () => {
+    try {
+      return await dispatchReplyWithBufferedBlockDispatcher({
+        ctx: ctxPayload,
+        cfg: params.cfg,
+        replyResolver: params.replyResolver,
+        dispatcherOptions: {
+          ...prefixOptions,
+          responsePrefix,
+          onHeartbeatStrip: () => {
+            if (!didLogHeartbeatStrip) {
+              didLogHeartbeatStrip = true;
+              logVerbose("Stripped stray HEARTBEAT_OK token from web reply");
+            }
+          },
+          deliver: async (payload: ReplyPayload, info) => {
+            await deliverWebReply({
+              replyResult: payload,
+              msg: params.msg,
+              mediaLocalRoots,
+              maxMediaBytes: params.maxMediaBytes,
+              textLimit,
+              chunkMode,
+              replyLogger: params.replyLogger,
+              connectionId: params.connectionId,
+              // Tool + block updates are noisy; skip their log lines.
+              skipLog: info.kind !== "final",
+              tableMode,
+            });
+            didSendReply = true;
+            if (info.kind === "tool") {
+              params.rememberSentText(payload.text, {});
+              return;
+            }
+            const shouldLog = info.kind === "final" && payload.text ? true : undefined;
+            params.rememberSentText(payload.text, {
+              combinedBody,
+              combinedBodySessionKey: params.route.sessionKey,
+              logVerboseMessage: shouldLog,
+            });
+            if (info.kind === "final") {
+              const fromDisplay =
+                params.msg.chatType === "group" ? conversationId : (params.msg.from ?? "unknown");
+              const hasMedia = Boolean(payload.mediaUrl || payload.mediaUrls?.length);
+              whatsappOutboundLog.info(
+                `Auto-replied to ${fromDisplay}${hasMedia ? " (media)" : ""}`,
+              );
+              if (shouldLogVerbose()) {
+                const preview = payload.text != null ? elide(payload.text, 400) : "<media>";
+                whatsappOutboundLog.debug(`Reply body: ${preview}${hasMedia ? " (media)" : ""}`);
+              }
+            }
+          },
+          onError: (err, info) => {
+            const label =
+              info.kind === "tool"
+                ? "tool update"
+                : info.kind === "block"
+                  ? "block update"
+                  : "auto-reply";
+            whatsappOutboundLog.error(
+              `Failed sending web ${label} to ${params.msg.from ?? conversationId}: ${formatError(err)}`,
+            );
+          },
+          onReplyStart: params.msg.sendComposing,
+        },
+        replyOptions: {
+          runId,
+          disableBlockStreaming:
+            typeof params.cfg.channels?.whatsapp?.blockStreaming === "boolean"
+              ? !params.cfg.channels.whatsapp.blockStreaming
+              : undefined,
+          onModelSelected,
+        },
+      });
+    } finally {
+      clearRunInFlight(runId);
+    }
+  })();
 
   if (!queuedFinal) {
     if (shouldClearGroupHistory) {

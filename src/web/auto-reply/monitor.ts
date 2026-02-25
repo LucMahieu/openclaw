@@ -5,8 +5,14 @@ import { DEFAULT_GROUP_HISTORY_LIMIT } from "../../auto-reply/reply/history.js";
 import { formatCliCommand } from "../../cli/command-format.js";
 import { waitForever } from "../../cli/wait.js";
 import { loadConfig } from "../../config/config.js";
+import { recoverInterruptedRuns } from "../../gateway/chat-run-recovery.js";
+import { loadSessionEntry } from "../../gateway/session-utils.js";
 import { logVerbose } from "../../globals.js";
 import { formatDurationPrecise } from "../../infra/format-time/format-duration.ts";
+import {
+  resolveOutboundTarget,
+  resolveSessionDeliveryTarget,
+} from "../../infra/outbound/targets.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
 import { registerUnhandledRejectionHandler } from "../../infra/unhandled-rejections.js";
 import { getChildLogger } from "../../logging.js";
@@ -223,6 +229,77 @@ export async function monitorWebChannel(
     });
     enqueueSystemEvent(`WhatsApp gateway connected${selfE164 ? ` as ${selfE164}` : ""}.`, {
       sessionKey: connectRoute.sessionKey,
+    });
+    void recoverInterruptedRuns({
+      source: "whatsapp_auto_reply",
+      accountId: connectRoute.accountId,
+      log: reconnectLogger,
+      resume: async (entry) => {
+        const { cfg: resumeCfg, entry: sessionEntry } = loadSessionEntry(entry.sessionKey);
+        const delivery = resolveSessionDeliveryTarget({
+          entry: sessionEntry,
+          requestedChannel: "last",
+          mode: "implicit",
+        });
+        if (!delivery.channel || !delivery.to) {
+          reconnectLogger.warn(
+            {
+              runId: entry.runId,
+              sessionKey: entry.sessionKey,
+            },
+            "web reconnect: interrupted run has no delivery target; skip resume",
+          );
+          return false;
+        }
+        const resolvedTarget = resolveOutboundTarget({
+          channel: delivery.channel,
+          to: delivery.to,
+          cfg: resumeCfg,
+          accountId: delivery.accountId,
+          mode: "implicit",
+        });
+        if (!resolvedTarget.ok) {
+          reconnectLogger.warn(
+            {
+              runId: entry.runId,
+              sessionKey: entry.sessionKey,
+              error: resolvedTarget.error.message,
+            },
+            "web reconnect: interrupted run delivery target invalid; skip resume",
+          );
+          return false;
+        }
+        const { agentCommand } = await import("../../commands/agent.js");
+        reconnectLogger.info(
+          {
+            runId: entry.runId,
+            sessionKey: entry.sessionKey,
+            channel: delivery.channel,
+          },
+          "web reconnect: resuming interrupted WhatsApp run",
+        );
+        await agentCommand(
+          {
+            sessionKey: entry.sessionKey,
+            runId: entry.runId,
+            message:
+              "Continue where you left off before the gateway reconnect. " +
+              "Do not restart finished work and avoid repeating text already sent.",
+            deliver: true,
+            channel: delivery.channel,
+            replyTo: resolvedTarget.to,
+            accountId: delivery.accountId,
+            threadId: delivery.threadId,
+          },
+          runtime,
+        );
+        return true;
+      },
+    }).catch((err) => {
+      reconnectLogger.error(
+        { error: formatError(err) },
+        "web reconnect: interrupted WhatsApp run recovery failed",
+      );
     });
 
     setActiveWebListener(account.accountId, listener);

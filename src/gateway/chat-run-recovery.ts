@@ -5,13 +5,17 @@ import { resolveStateDir } from "../config/paths.js";
 import { loadJsonFile, saveJsonFile } from "../infra/json-file.js";
 import { loadSessionEntry, readSessionMessages } from "./session-utils.js";
 
-const CHAT_RUN_RECOVERY_VERSION = 1 as const;
+const CHAT_RUN_RECOVERY_VERSION = 2 as const;
 const MAX_RECOVERY_ATTEMPTS = 3;
 const MAX_RUN_AGE_MS = 2 * 60 * 60_000;
 
-type PersistedGatewayChatRun = {
+export type RunRecoverySource = "chat_send" | "whatsapp_auto_reply";
+
+export type PersistedGatewayChatRun = {
   runId: string;
   sessionKey: string;
+  source: RunRecoverySource;
+  accountId?: string;
   startedAtMs: number;
   updatedAtMs: number;
   recoveryAttempts?: number;
@@ -21,6 +25,15 @@ type PersistedGatewayChatRun = {
 type PersistedGatewayChatRuns = {
   version: typeof CHAT_RUN_RECOVERY_VERSION;
   runs: Record<string, PersistedGatewayChatRun>;
+};
+
+type LegacyPersistedGatewayChatRun = Omit<PersistedGatewayChatRun, "source"> & {
+  source?: RunRecoverySource;
+};
+
+type LegacyPersistedGatewayChatRuns = {
+  version?: number;
+  runs?: Record<string, LegacyPersistedGatewayChatRun>;
 };
 
 function resolveGatewayRecoveryStateDir(env: NodeJS.ProcessEnv = process.env): string {
@@ -43,12 +56,8 @@ function loadPersistedGatewayChatRuns(): Map<string, PersistedGatewayChatRun> {
   if (!raw || typeof raw !== "object") {
     return new Map();
   }
-  const parsed = raw as Partial<PersistedGatewayChatRuns>;
-  if (
-    parsed.version !== CHAT_RUN_RECOVERY_VERSION ||
-    !parsed.runs ||
-    typeof parsed.runs !== "object"
-  ) {
+  const parsed = raw as LegacyPersistedGatewayChatRuns;
+  if (!parsed.runs || typeof parsed.runs !== "object") {
     return new Map();
   }
   const out = new Map<string, PersistedGatewayChatRun>();
@@ -63,9 +72,19 @@ function loadPersistedGatewayChatRuns(): Map<string, PersistedGatewayChatRun> {
     if (!typed.sessionKey || typeof typed.sessionKey !== "string") {
       continue;
     }
+    const source =
+      typed.source === "chat_send" || typed.source === "whatsapp_auto_reply"
+        ? typed.source
+        : "chat_send";
+    const accountId =
+      typeof typed.accountId === "string" && typed.accountId.trim()
+        ? typed.accountId.trim()
+        : undefined;
     out.set(runId, {
       runId: typed.runId,
       sessionKey: typed.sessionKey,
+      source,
+      accountId,
       startedAtMs: Number.isFinite(typed.startedAtMs) ? typed.startedAtMs : Date.now(),
       updatedAtMs: Number.isFinite(typed.updatedAtMs) ? typed.updatedAtMs : Date.now(),
       recoveryAttempts:
@@ -92,10 +111,17 @@ function savePersistedGatewayChatRuns(runs: Map<string, PersistedGatewayChatRun>
   } satisfies PersistedGatewayChatRuns);
 }
 
-export function markGatewayChatRunInFlight(params: { runId: string; sessionKey: string }) {
+export function markRunInFlight(params: {
+  runId: string;
+  sessionKey: string;
+  source: RunRecoverySource;
+  accountId?: string;
+}) {
   const runId = params.runId.trim();
   const sessionKey = params.sessionKey.trim();
-  if (!runId || !sessionKey) {
+  const source = params.source;
+  const accountId = params.accountId?.trim();
+  if (!runId || !sessionKey || !source) {
     return;
   }
   const now = Date.now();
@@ -104,6 +130,8 @@ export function markGatewayChatRunInFlight(params: { runId: string; sessionKey: 
   runs.set(runId, {
     runId,
     sessionKey,
+    source,
+    accountId,
     startedAtMs: existing?.startedAtMs ?? now,
     updatedAtMs: now,
     recoveryAttempts: existing?.recoveryAttempts,
@@ -112,7 +140,7 @@ export function markGatewayChatRunInFlight(params: { runId: string; sessionKey: 
   savePersistedGatewayChatRuns(runs);
 }
 
-export function clearGatewayChatRunInFlight(runIdRaw: string) {
+export function clearRunInFlight(runIdRaw: string) {
   const runId = runIdRaw.trim();
   if (!runId) {
     return;
@@ -122,6 +150,18 @@ export function clearGatewayChatRunInFlight(runIdRaw: string) {
     return;
   }
   savePersistedGatewayChatRuns(runs);
+}
+
+export function markGatewayChatRunInFlight(params: { runId: string; sessionKey: string }) {
+  markRunInFlight({
+    runId: params.runId,
+    sessionKey: params.sessionKey,
+    source: "chat_send",
+  });
+}
+
+export function clearGatewayChatRunInFlight(runIdRaw: string) {
+  clearRunInFlight(runIdRaw);
 }
 
 function containsToolUseBlock(content: unknown): boolean {
@@ -179,7 +219,9 @@ function shouldResumeFromTranscript(params: { sessionKey: string }): boolean {
   return !isCompletedTerminalAssistant(last as Extract<AgentMessage, { role: "assistant" }>);
 }
 
-export async function recoverInterruptedGatewayChatRuns(params: {
+export async function recoverInterruptedRuns(params: {
+  source?: RunRecoverySource;
+  accountId?: string;
   resume: (entry: PersistedGatewayChatRun) => Promise<boolean>;
   log: {
     info: (msg: string) => void;
@@ -194,6 +236,12 @@ export async function recoverInterruptedGatewayChatRuns(params: {
 
   let changed = false;
   for (const [runId, entry] of runs) {
+    if (params.source && entry.source !== params.source) {
+      continue;
+    }
+    if (params.accountId && entry.accountId !== params.accountId) {
+      continue;
+    }
     const ageMs = now - entry.startedAtMs;
     const attempts = entry.recoveryAttempts ?? 0;
     if (ageMs > MAX_RUN_AGE_MS || attempts >= MAX_RECOVERY_ATTEMPTS) {
@@ -230,4 +278,17 @@ export async function recoverInterruptedGatewayChatRuns(params: {
   if (changed) {
     savePersistedGatewayChatRuns(runs);
   }
+}
+
+export async function recoverInterruptedGatewayChatRuns(params: {
+  resume: (entry: PersistedGatewayChatRun) => Promise<boolean>;
+  log: {
+    info: (msg: string) => void;
+    warn: (msg: string) => void;
+  };
+}) {
+  await recoverInterruptedRuns({
+    ...params,
+    source: "chat_send",
+  });
 }

@@ -9,6 +9,11 @@ let capturedDispatchParams: unknown;
 let sessionDir: string | undefined;
 let sessionStorePath: string;
 let backgroundTasks: Set<Promise<unknown>>;
+const dispatcherMock = vi.hoisted(() => vi.fn());
+const runRecoveryMock = vi.hoisted(() => ({
+  markRunInFlight: vi.fn(),
+  clearRunInFlight: vi.fn(),
+}));
 
 const defaultReplyLogger = {
   info: () => {},
@@ -58,12 +63,20 @@ function makeProcessMessageArgs(params: {
 
 vi.mock("../../../auto-reply/reply/provider-dispatcher.js", () => ({
   // oxlint-disable-next-line typescript/no-explicit-any
-  dispatchReplyWithBufferedBlockDispatcher: vi.fn(async (params: any) => {
-    capturedDispatchParams = params;
-    capturedCtx = params.ctx;
-    return { queuedFinal: false };
-  }),
+  dispatchReplyWithBufferedBlockDispatcher: dispatcherMock,
 }));
+
+vi.mock("../../../gateway/chat-run-recovery.js", () => ({
+  markRunInFlight: (...args: unknown[]) => runRecoveryMock.markRunInFlight(...args),
+  clearRunInFlight: (...args: unknown[]) => runRecoveryMock.clearRunInFlight(...args),
+}));
+
+dispatcherMock.mockImplementation(async (params: unknown) => {
+  const typed = params as { ctx?: unknown };
+  capturedDispatchParams = params;
+  capturedCtx = typed.ctx;
+  return { queuedFinal: false };
+});
 
 vi.mock("./last-route.js", () => ({
   trackBackgroundTask: (tasks: Set<Promise<unknown>>, task: Promise<unknown>) => {
@@ -81,6 +94,9 @@ describe("web processMessage inbound contract", () => {
   beforeEach(async () => {
     capturedCtx = undefined;
     capturedDispatchParams = undefined;
+    dispatcherMock.mockClear();
+    runRecoveryMock.markRunInFlight.mockClear();
+    runRecoveryMock.clearRunInFlight.mockClear();
     backgroundTasks = new Set();
     sessionDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-process-message-"));
     sessionStorePath = path.join(sessionDir, "sessions.json");
@@ -228,5 +244,53 @@ describe("web processMessage inbound contract", () => {
     );
 
     expect(groupHistories.get("whatsapp:default:group:123@g.us") ?? []).toHaveLength(0);
+  });
+
+  it("marks in-flight before dispatch and clears in finally", async () => {
+    await processMessage(
+      makeProcessMessageArgs({
+        routeSessionKey: "agent:main:whatsapp:direct:+111",
+        groupHistoryKey: "+111",
+        msg: {
+          id: "m-finally",
+          from: "+111",
+          to: "+222",
+          chatType: "direct",
+          body: "hi",
+        },
+      }),
+    );
+
+    expect(runRecoveryMock.markRunInFlight).toHaveBeenCalledTimes(1);
+    expect(runRecoveryMock.clearRunInFlight).toHaveBeenCalledTimes(1);
+    expect(runRecoveryMock.markRunInFlight.mock.invocationCallOrder[0]).toBeLessThan(
+      dispatcherMock.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    );
+    expect(runRecoveryMock.clearRunInFlight.mock.invocationCallOrder[0]).toBeGreaterThan(
+      dispatcherMock.mock.invocationCallOrder[0] ?? -1,
+    );
+  });
+
+  it("clears in-flight run when dispatch throws", async () => {
+    dispatcherMock.mockRejectedValueOnce(new Error("dispatch-failed"));
+
+    await expect(
+      processMessage(
+        makeProcessMessageArgs({
+          routeSessionKey: "agent:main:whatsapp:direct:+333",
+          groupHistoryKey: "+333",
+          msg: {
+            id: "m-throw",
+            from: "+333",
+            to: "+444",
+            chatType: "direct",
+            body: "hi",
+          },
+        }),
+      ),
+    ).rejects.toThrow("dispatch-failed");
+
+    expect(runRecoveryMock.markRunInFlight).toHaveBeenCalledTimes(1);
+    expect(runRecoveryMock.clearRunInFlight).toHaveBeenCalledTimes(1);
   });
 });
