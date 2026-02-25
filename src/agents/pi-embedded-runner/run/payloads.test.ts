@@ -35,7 +35,7 @@ describe("buildEmbeddedRunPayloads tool-error warnings", () => {
 
     expect(payloads).toHaveLength(1);
     expect(payloads[0]?.isError).toBe(true);
-    expect(payloads[0]?.text).toContain("Exec");
+    expect(payloads[0]?.text).toContain("💻");
     expect(payloads[0]?.text).toContain("command failed");
   });
 
@@ -48,5 +48,17 @@ describe("buildEmbeddedRunPayloads tool-error warnings", () => {
     expect(payloads).toHaveLength(1);
     expect(payloads[0]?.isError).toBe(true);
     expect(payloads[0]?.text).toContain("Write");
+  });
+
+  it("wraps tool summary lines in triple backticks when monospace fence is enabled", () => {
+    const payloads = buildPayloads({
+      toolMetas: [{ toolName: "exec", meta: "Running cd ~/workspace" }],
+      inlineToolResultsAllowed: true,
+      verboseLevel: "on",
+      toolResultMonospaceFence: true,
+    });
+
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0]?.text).toBe("```💻 Running cd ~/workspace```");
   });
 });

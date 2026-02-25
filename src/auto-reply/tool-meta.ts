@@ -3,6 +3,7 @@ import { shortenHomeInString, shortenHomePath } from "../utils.js";
 
 type ToolAggregateOptions = {
   markdown?: boolean;
+  monospaceFence?: boolean;
 };
 
 export function shortenPath(p: string): string {
@@ -68,7 +69,8 @@ export function formatToolAggregate(
   const allSegments = [...rawSegments, ...segments];
   const meta = allSegments.join("; ");
   const formattedMeta = formatMetaForDisplay(toolName, meta, options?.markdown);
-  return hideLabel ? `${prefix} ${formattedMeta}` : `${prefix}: ${formattedMeta}`;
+  const rendered = hideLabel ? `${prefix} ${formattedMeta}` : `${prefix}: ${formattedMeta}`;
+  return options?.monospaceFence ? wrapMonospaceFence(rendered) : rendered;
 }
 
 export function formatToolPrefix(toolName?: string, meta?: string) {
@@ -146,6 +148,17 @@ function maybeWrapMarkdown(value: string, markdown?: boolean): string {
     return value;
   }
   return `\`${value}\``;
+}
+
+function wrapMonospaceFence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("```") && trimmed.endsWith("```")) {
+    return trimmed;
+  }
+  return `\`\`\`${trimmed}\`\`\``;
 }
 
 function shouldHideToolLabel(toolName?: string): boolean {

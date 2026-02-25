@@ -45,6 +45,12 @@ describe("tool meta formatting", () => {
     expect(out).toContain("`~/dir/a.txt`");
   });
 
+  it("wraps full aggregate in triple-backtick monospace fence when enabled", () => {
+    vi.stubEnv("HOME", home);
+    const out = formatToolAggregate("exec", ["Running command"], { monospaceFence: true });
+    expect(out).toBe("```💻 Running command```");
+  });
+
   it("keeps exec flags outside markdown and moves them to the front", () => {
     vi.stubEnv("HOME", home);
     const out = formatToolAggregate("exec", [`cd ${home}/dir && gemini 2>&1 · elevated`], {
