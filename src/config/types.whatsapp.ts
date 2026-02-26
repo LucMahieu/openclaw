@@ -101,6 +101,8 @@ export type WhatsAppConfig = {
   debounceMs?: number;
   /** Heartbeat visibility settings for this channel. */
   heartbeat?: ChannelHeartbeatVisibilityConfig;
+  /** Show emoji prefix on tool-call summary messages (default: true). */
+  toolSummaryEmoji?: boolean;
 };
 
 export type WhatsAppAccountConfig = {
@@ -149,4 +151,6 @@ export type WhatsAppAccountConfig = {
   debounceMs?: number;
   /** Heartbeat visibility settings for this account. */
   heartbeat?: ChannelHeartbeatVisibilityConfig;
+  /** Per-account override for tool-call summary emoji visibility. */
+  toolSummaryEmoji?: boolean;
 };

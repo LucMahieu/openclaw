@@ -61,4 +61,16 @@ describe("buildEmbeddedRunPayloads tool-error warnings", () => {
     expect(payloads).toHaveLength(1);
     expect(payloads[0]?.text).toBe("`💻 Running cd ~/workspace`");
   });
+
+  it("can render tool summary lines without emoji", () => {
+    const payloads = buildPayloads({
+      toolMetas: [{ toolName: "exec", meta: "Running cd ~/workspace" }],
+      inlineToolResultsAllowed: true,
+      verboseLevel: "on",
+      toolResultIncludeEmoji: false,
+    });
+
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0]?.text).toBe("Running cd ~/workspace");
+  });
 });

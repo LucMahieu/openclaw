@@ -83,6 +83,7 @@ export function buildEmbeddedRunPayloads(params: {
   reasoningLevel?: ReasoningLevel;
   toolResultFormat?: ToolResultFormat;
   toolResultMonospaceFence?: boolean;
+  toolResultIncludeEmoji?: boolean;
   suppressToolErrorWarnings?: boolean;
   inlineToolResultsAllowed: boolean;
 }): Array<{
@@ -144,6 +145,7 @@ export function buildEmbeddedRunPayloads(params: {
       const agg = formatToolAggregate(toolName, meta ? [meta] : [], {
         markdown: useMarkdown,
         monospaceFence: params.toolResultMonospaceFence,
+        includeEmoji: params.toolResultIncludeEmoji,
       });
       const {
         text: cleanedText,
@@ -275,6 +277,7 @@ export function buildEmbeddedRunPayloads(params: {
         {
           markdown: useMarkdown,
           monospaceFence: params.toolResultMonospaceFence,
+          includeEmoji: params.toolResultIncludeEmoji,
         },
       );
       const errorSuffix = params.lastToolError.error ? `: ${params.lastToolError.error}` : "";

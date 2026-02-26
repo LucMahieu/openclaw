@@ -51,6 +51,12 @@ describe("tool meta formatting", () => {
     expect(out).toBe("`💻 Running command`");
   });
 
+  it("can render aggregate without emoji", () => {
+    vi.stubEnv("HOME", home);
+    const out = formatToolAggregate("exec", ["Running command"], { includeEmoji: false });
+    expect(out).toBe("Running command");
+  });
+
   it("keeps exec flags outside markdown and moves them to the front", () => {
     vi.stubEnv("HOME", home);
     const out = formatToolAggregate("exec", [`cd ${home}/dir && gemini 2>&1 · elevated`], {
@@ -75,5 +81,8 @@ describe("tool meta formatting", () => {
     expect(formatToolPrefix("cron", 'Scheduling cron job "resume-notion" every 2m.')).toBe(
       '⏰ Scheduling cron job "resume-notion" every 2m.',
     );
+    expect(
+      formatToolPrefix("exec", "Running a command in terminal.", { includeEmoji: false }),
+    ).toBe("Running a command in terminal.");
   });
 });

@@ -6,6 +6,7 @@ import {
   isMarkdownCapableMessageChannel,
   normalizeMessageChannel,
 } from "../../utils/message-channel.js";
+import { resolveWhatsAppAccount } from "../../web/accounts.js";
 import { resolveOpenClawAgentDir } from "../agent-paths.js";
 import {
   isProfileInCooldown,
@@ -193,6 +194,15 @@ export async function runEmbeddedPiAgent(
       : "markdown");
   const resolvedToolResultMonospaceFence =
     params.toolResultMonospaceFence ?? normalizeMessageChannel(channelHint) === "whatsapp";
+  const normalizedMessageChannel = normalizeMessageChannel(channelHint);
+  const resolvedToolResultIncludeEmoji =
+    params.toolResultIncludeEmoji ??
+    (normalizedMessageChannel === "whatsapp" && params.config
+      ? (resolveWhatsAppAccount({
+          cfg: params.config,
+          accountId: params.agentAccountId,
+        }).toolSummaryEmoji ?? true)
+      : true);
   const isProbeSession = params.sessionId?.startsWith("probe-") ?? false;
 
   return enqueueSession(() =>
@@ -525,6 +535,7 @@ export async function runEmbeddedPiAgent(
             reasoningLevel: params.reasoningLevel,
             toolResultFormat: resolvedToolResultFormat,
             toolResultMonospaceFence: resolvedToolResultMonospaceFence,
+            toolResultIncludeEmoji: resolvedToolResultIncludeEmoji,
             execOverrides: params.execOverrides,
             bashElevated: params.bashElevated,
             timeoutMs: params.timeoutMs,
@@ -1006,6 +1017,7 @@ export async function runEmbeddedPiAgent(
             reasoningLevel: params.reasoningLevel,
             toolResultFormat: resolvedToolResultFormat,
             toolResultMonospaceFence: resolvedToolResultMonospaceFence,
+            toolResultIncludeEmoji: resolvedToolResultIncludeEmoji,
             suppressToolErrorWarnings: params.suppressToolErrorWarnings,
             inlineToolResultsAllowed: false,
           });

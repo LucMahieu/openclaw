@@ -77,6 +77,8 @@ export type RunEmbeddedPiAgentParams = {
   toolResultFormat?: ToolResultFormat;
   /** Wrap tool-summary lines in inline backticks (used for WhatsApp monospace rendering). */
   toolResultMonospaceFence?: boolean;
+  /** Include emoji prefixes in tool-summary lines. */
+  toolResultIncludeEmoji?: boolean;
   /** If true, suppress tool error warning payloads for this run (including mutating tools). */
   suppressToolErrorWarnings?: boolean;
   execOverrides?: Pick<ExecToolDefaults, "host" | "security" | "ask" | "node">;

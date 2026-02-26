@@ -15,6 +15,7 @@ export type SubscribeEmbeddedPiSessionParams = {
   reasoningMode?: ReasoningLevel;
   toolResultFormat?: ToolResultFormat;
   toolResultMonospaceFence?: boolean;
+  toolResultIncludeEmoji?: boolean;
   shouldEmitToolResult?: () => boolean;
   shouldEmitToolOutput?: () => boolean;
   onToolResult?: (payload: { text?: string; mediaUrls?: string[] }) => void | Promise<void>;

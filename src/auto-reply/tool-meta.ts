@@ -4,6 +4,7 @@ import { shortenHomeInString, shortenHomePath } from "../utils.js";
 type ToolAggregateOptions = {
   markdown?: boolean;
   monospaceFence?: boolean;
+  includeEmoji?: boolean;
 };
 
 export function shortenPath(p: string): string {
@@ -24,10 +25,16 @@ export function formatToolAggregate(
 ): string {
   const filtered = (metas ?? []).filter(Boolean).map(shortenMeta);
   const display = resolveToolDisplay({ name: toolName });
+  const includeEmoji = options?.includeEmoji !== false;
   const hideLabel = shouldHideToolLabel(toolName);
-  const prefix = hideLabel ? display.emoji : `${display.emoji} ${display.label}`;
+  const labelPrefix = hideLabel ? "" : display.label;
+  const prefix = includeEmoji
+    ? hideLabel
+      ? display.emoji
+      : `${display.emoji} ${display.label}`
+    : labelPrefix;
   if (!filtered.length) {
-    return prefix;
+    return prefix || display.label;
   }
 
   const rawSegments: string[] = [];
@@ -69,18 +76,32 @@ export function formatToolAggregate(
   const allSegments = [...rawSegments, ...segments];
   const meta = allSegments.join("; ");
   const formattedMeta = formatMetaForDisplay(toolName, meta, options?.markdown);
-  const rendered = hideLabel ? `${prefix} ${formattedMeta}` : `${prefix}: ${formattedMeta}`;
+  const rendered = hideLabel
+    ? prefix
+      ? `${prefix} ${formattedMeta}`
+      : formattedMeta
+    : `${prefix}: ${formattedMeta}`;
   return options?.monospaceFence ? wrapMonospaceFence(rendered) : rendered;
 }
 
-export function formatToolPrefix(toolName?: string, meta?: string) {
+export function formatToolPrefix(
+  toolName?: string,
+  meta?: string,
+  options?: { includeEmoji?: boolean },
+) {
   const extra = meta?.trim() ? shortenMeta(meta) : undefined;
   const display = resolveToolDisplay({ name: toolName, meta: extra });
+  const includeEmoji = options?.includeEmoji !== false;
+  const emojiPrefix = includeEmoji ? `${display.emoji} ` : "";
   if (shouldHideToolLabel(toolName)) {
     const detail = formatToolDetail(display);
-    return detail ? `${display.emoji} ${detail}` : display.emoji;
+    if (detail) {
+      return includeEmoji ? `${display.emoji} ${detail}` : detail;
+    }
+    return includeEmoji ? display.emoji : display.label;
   }
-  return formatToolSummary(display);
+  const base = formatToolSummary(display);
+  return includeEmoji ? base : base.replace(emojiPrefix, "");
 }
 
 function formatMetaForDisplay(
