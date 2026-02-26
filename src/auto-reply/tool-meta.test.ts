@@ -61,6 +61,16 @@ describe("tool meta formatting", () => {
     expect(out).toBe("□ _```Running command```_");
   });
 
+  it("applies monospace+italic formatting when bullet mode has no meta", () => {
+    vi.stubEnv("HOME", home);
+    const out = formatToolAggregate("cron", [], {
+      monospaceFence: true,
+      bulletPrefix: "✓ ",
+      includeEmoji: false,
+    });
+    expect(out).toBe("✓ _```Cron```_");
+  });
+
   it("removes tool label prefixes in bullet mode", () => {
     vi.stubEnv("HOME", home);
     const out = formatToolAggregate(

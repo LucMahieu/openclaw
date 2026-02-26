@@ -194,9 +194,9 @@ describe("summarizeToolCallForUser", () => {
   it("removes first-person phrasing like 'Ik heb ...' from summaries", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "");
     const summary = await summarizeToolCallForUser({
-      toolName: "web_search",
+      toolName: "exec",
       toolCallId: "t7b",
-      args: { q: "weather curacao february" },
+      args: { command: "echo weather check" },
       fallbackMeta: "Ik heb gezocht naar weer in Curacao tijdens februari",
     });
     expect(summary).toBe("Gezocht naar weer in Curacao tijdens februari");
@@ -211,6 +211,37 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "Ik nam een screenshot op mijn Mac",
     });
     expect(summary).toBe("Screenshot genomen op mijn Mac");
+  });
+
+  it("creates structured fallback for web_search queries", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const summary = await summarizeToolCallForUser({
+      toolName: "web_search",
+      toolCallId: "t7d",
+      args: { q: "OpenClaw AI assistant", topK: 1 },
+    });
+    expect(summary).toBe('Gezocht naar "OpenClaw AI assistant" (top 1)');
+  });
+
+  it("replaces low-signal model output with structured fallback", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          { finish_reason: "stop", message: { content: 'for "OpenClaw AI assistant" (top 1)' } },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "web_search",
+      toolCallId: "t7e",
+      args: { q: "OpenClaw AI assistant", topK: 1 },
+      fallbackMeta: 'for "OpenClaw AI assistant" (top 1)',
+    });
+    expect(summary).toBe('Gezocht naar "OpenClaw AI assistant" (top 1)');
   });
 
   it("retries once on empty length-truncated response", async () => {

@@ -64,6 +64,10 @@ const LEAD_REWRITE_MAP: Array<[RegExp, string]> = [
   [/^\s*spawning\s+(.+)$/i, "Gestart: $1"],
   [/^\s*nam\s+een\s+screenshot\s+(.+)$/i, "Screenshot genomen $1"],
   [/^\s*took\s+a\s+screenshot\s+(.+)$/i, "Screenshot genomen $1"],
+  [/^\s*for\s+(.+)$/i, "Gezocht naar $1"],
+  [/^\s*from\s+(.+)$/i, "Gelezen uit $1"],
+  [/^\s*print\s+text$/i, "Tekst geprint"],
+  [/^\s*cron$/i, "Cronjob beheerd"],
   [/^\s*zoeken\s+naar\s+(.+)$/i, "Gezocht naar $1"],
   [/^\s*zoekt\s+naar\s+(.+)$/i, "Gezocht naar $1"],
   [/^\s*analyseren\s+(.+)$/i, "Geanalyseerd: $1"],
@@ -318,6 +322,32 @@ function summarizeCronSchedule(schedule: unknown): string | undefined {
   return undefined;
 }
 
+function resolveWebSearchFallbackSummary(input: ToolCallSummaryInput): string | undefined {
+  const q =
+    extractStringArg(input.args, "q") ??
+    extractStringArg(input.args, "query") ??
+    extractStringArg(input.args, "question");
+  const topK = extractNumberArg(input.args, "topK") ?? extractNumberArg(input.args, "top_k");
+  if (q && topK && topK > 0) {
+    return `Gezocht naar "${truncatePlain(q, 90)}" (top ${Math.round(topK)})`;
+  }
+  if (q) {
+    return `Gezocht naar "${truncatePlain(q, 90)}"`;
+  }
+  return "Webzoekopdracht uitgevoerd";
+}
+
+function resolveMemorySearchFallbackSummary(input: ToolCallSummaryInput): string | undefined {
+  const q =
+    extractStringArg(input.args, "q") ??
+    extractStringArg(input.args, "query") ??
+    extractStringArg(input.args, "text");
+  if (q) {
+    return `In geheugen gezocht naar "${truncatePlain(q, 90)}"`;
+  }
+  return "Geheugenzoekopdracht uitgevoerd";
+}
+
 function resolveProcessFallbackSummary(input: ToolCallSummaryInput): string | undefined {
   const action = extractStringArg(input.args, "action")?.toLowerCase();
   const sessionId = extractStringArg(input.args, "sessionId");
@@ -442,6 +472,12 @@ function resolveFallbackSummary(input: ToolCallSummaryInput): string | undefined
   if (toolName === "sessions_spawn") {
     return resolveSessionsSpawnFallbackSummary(input);
   }
+  if (toolName === "web_search") {
+    return resolveWebSearchFallbackSummary(input);
+  }
+  if (toolName === "memory_search") {
+    return resolveMemorySearchFallbackSummary(input);
+  }
 
   const explicit = sanitizeSummary(input.fallbackMeta);
   if (explicit) {
@@ -488,6 +524,26 @@ function shouldRetryAttempt(result: SummaryAttemptResult): boolean {
       return true;
     }
     return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+  }
+  return false;
+}
+
+function isLowSignalSummary(summary: string): boolean {
+  const text = summary.trim().toLowerCase();
+  if (!text) {
+    return true;
+  }
+  if (
+    text === "cron" ||
+    text === "print text" ||
+    text === "run bash" ||
+    text === "run ssh" ||
+    text === "run"
+  ) {
+    return true;
+  }
+  if (text.startsWith("for ") || text.startsWith("from ")) {
+    return true;
   }
   return false;
 }
@@ -632,7 +688,14 @@ export async function summarizeToolCallForUser(
         } elapsedMs=${elapsedMs} timeoutMs=${attemptTimeoutMs}`,
       );
       if (attempt.summary) {
-        setCache(cacheKey, attempt.summary);
+        const fallbackNormalized = sanitizeSummary(
+          normalizeToolSummaryForDisplay(fallbackSummary ?? ""),
+        );
+        const resolvedSummary =
+          isLowSignalSummary(attempt.summary) && fallbackNormalized
+            ? fallbackNormalized
+            : attempt.summary;
+        setCache(cacheKey, resolvedSummary);
         if (i > 0) {
           log.debug(
             `tool summary recovered after retry: tool=${toolName} call=${toolCallId} attempt=${
@@ -640,7 +703,7 @@ export async function summarizeToolCallForUser(
             } timeoutMs=${attemptTimeoutMs}`,
           );
         }
-        return attempt.summary;
+        return resolvedSummary;
       }
 
       lastReason = attempt.reason ?? (attempt.ok ? "empty" : "failed");

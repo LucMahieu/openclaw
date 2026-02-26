@@ -39,7 +39,11 @@ export function formatToolAggregate(
   const prefix = bulletPrefix ? labelPrefix : emojiPrefix;
   if (!filtered.length) {
     const base = bulletPrefix ? display.label : prefix || display.label;
-    return bulletPrefix ? `${bulletPrefix}${base}` : base;
+    if (bulletPrefix) {
+      const fencedBase = options?.monospaceFence ? wrapMonospaceFence(base) : base;
+      return `${bulletPrefix}${fencedBase}`;
+    }
+    return options?.monospaceFence ? wrapMonospaceFence(base) : base;
   }
 
   const rawSegments: string[] = [];
