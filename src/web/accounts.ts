@@ -157,7 +157,7 @@ export function resolveWhatsAppAccount(params: {
       accountCfg?.toolBarBulletStyle ??
       rootCfg?.toolBarBulletStyle ??
       params.cfg.ui?.toolBarBulletStyle ??
-      "checkboxes",
+      "circles",
   };
 }
 

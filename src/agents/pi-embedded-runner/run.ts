@@ -192,8 +192,7 @@ export async function runEmbeddedPiAgent(
         ? "markdown"
         : "plain"
       : "markdown");
-  const resolvedToolResultMonospaceFence =
-    params.toolResultMonospaceFence ?? normalizeMessageChannel(channelHint) === "whatsapp";
+  const resolvedToolResultMonospaceFence = params.toolResultMonospaceFence ?? false;
   const normalizedMessageChannel = normalizeMessageChannel(channelHint);
   const whatsappAccount =
     normalizedMessageChannel === "whatsapp" && params.config

@@ -29,6 +29,9 @@ export function formatToolAggregate(
   const display = resolveToolDisplay({ name: toolName });
   const includeEmoji = options?.includeEmoji !== false;
   const bulletPrefix = options?.bulletPrefix;
+  const circleBulletInlineCode = Boolean(
+    bulletPrefix && options?.markdown && isCircleBulletPrefix(bulletPrefix),
+  );
   const hideLabel = shouldHideToolLabel(toolName);
   const labelPrefix = hideLabel ? "" : display.label;
   const emojiPrefix = includeEmoji
@@ -40,6 +43,9 @@ export function formatToolAggregate(
   if (!filtered.length) {
     const base = bulletPrefix ? display.label : prefix || display.label;
     if (bulletPrefix) {
+      if (circleBulletInlineCode) {
+        return wrapInlineCode(`${bulletPrefix}${base}`);
+      }
       const fencedBase = options?.monospaceFence ? wrapMonospaceFence(base) : base;
       return `${bulletPrefix}${fencedBase}`;
     }
@@ -84,7 +90,11 @@ export function formatToolAggregate(
 
   const allSegments = [...rawSegments, ...segments];
   const meta = allSegments.join("; ");
-  const formattedMeta = formatMetaForDisplay(toolName, meta, options?.markdown);
+  const formattedMeta = formatMetaForDisplay(
+    toolName,
+    meta,
+    circleBulletInlineCode ? false : options?.markdown,
+  );
   const body = bulletPrefix
     ? formattedMeta
     : hideLabel
@@ -93,10 +103,30 @@ export function formatToolAggregate(
         : formattedMeta
       : `${prefix}: ${formattedMeta}`;
   if (bulletPrefix) {
+    if (circleBulletInlineCode) {
+      return wrapInlineCode(`${bulletPrefix}${body}`);
+    }
     const fencedBody = options?.monospaceFence ? wrapMonospaceFence(body) : body;
     return `${bulletPrefix}${fencedBody}`;
   }
   return options?.monospaceFence ? wrapMonospaceFence(body) : body;
+}
+
+function isCircleBulletPrefix(value: string): boolean {
+  const trimmed = value.trimStart();
+  return trimmed.startsWith("○") || trimmed.startsWith("●");
+}
+
+function wrapInlineCode(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (/^`[^`]+`$/.test(trimmed)) {
+    return trimmed;
+  }
+  const escaped = trimmed.replace(/`/g, "");
+  return `\`${escaped}\``;
 }
 
 export function formatToolPrefix(

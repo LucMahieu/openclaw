@@ -84,6 +84,16 @@ describe("tool meta formatting", () => {
     expect(out).toBe("□ Searching Maastricht University requirements");
   });
 
+  it("keeps circles inside inline code in markdown bullet mode", () => {
+    vi.stubEnv("HOME", home);
+    const out = formatToolAggregate("exec", ["Gezocht naar de startdatum"], {
+      markdown: true,
+      bulletPrefix: "○ ",
+      includeEmoji: false,
+    });
+    expect(out).toBe("`○ Gezocht naar de startdatum`");
+  });
+
   it("can render aggregate without emoji", () => {
     vi.stubEnv("HOME", home);
     const out = formatToolAggregate("exec", ["Running command"], { includeEmoji: false });
