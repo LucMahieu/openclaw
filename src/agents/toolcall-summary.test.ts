@@ -244,6 +244,30 @@ describe("summarizeToolCallForUser", () => {
     expect(summary).toBe('Gezocht naar "OpenClaw AI assistant" (top 1)');
   });
 
+  it("replaces non-compliant style output with structured fallback", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: { content: "Zoekde informatie over OpenClaw AI assistant" },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "web_search",
+      toolCallId: "t7f",
+      args: { q: "OpenClaw AI assistant", topK: 1 },
+      fallbackMeta: 'for "OpenClaw AI assistant" (top 1)',
+    });
+    expect(summary).toBe('Gezocht naar "OpenClaw AI assistant" (top 1)');
+  });
+
   it("retries once on empty length-truncated response", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
     const fetchMock = vi

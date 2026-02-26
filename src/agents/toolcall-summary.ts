@@ -548,6 +548,20 @@ function isLowSignalSummary(summary: string): boolean {
   return false;
 }
 
+function isStyleCompliantSummary(summary: string): boolean {
+  const text = summary.trim();
+  if (!text || /^ik\b/i.test(text)) {
+    return false;
+  }
+  if (/^zoekde\b/i.test(text)) {
+    return false;
+  }
+  if (!/\s/.test(text)) {
+    return false;
+  }
+  return true;
+}
+
 async function delay(ms: number): Promise<void> {
   if (!Number.isFinite(ms) || ms <= 0) {
     return;
@@ -608,7 +622,7 @@ export async function summarizeToolCallForUser(
           {
             role: "system",
             content:
-              "Je vat tool-calls samen voor chatgebruikers. Geef exact één korte zin (6-14 woorden), in het Nederlands, in de verleden tijd, met sentence case. Wees concreet: noem de uitgevoerde actie en het object/resultaat. Vermijd vage labels zoals 'startup validatie deadline'. Geen markdown, geen bullets, geen IDs.",
+              "Je vat tool-calls samen voor chatgebruikers. Geef exact één korte zin (6-14 woorden), in het Nederlands, in de verleden tijd, met sentence case. Begin altijd met een statusprefix in voltooid-deelwoordstijl, bijvoorbeeld: 'Gezocht naar ...', 'Gelezen uit ...', 'Uitgevoerd: ...', 'Cronjob ...', 'Screenshot ...'. Gebruik nooit eerste persoon (geen 'ik'). Wees concreet: noem actie en object/resultaat. Vermijd vage labels zoals 'startup validatie deadline'. Geen markdown, geen bullets, geen IDs.",
           },
           {
             role: "user",
@@ -692,7 +706,8 @@ export async function summarizeToolCallForUser(
           normalizeToolSummaryForDisplay(fallbackSummary ?? ""),
         );
         const resolvedSummary =
-          isLowSignalSummary(attempt.summary) && fallbackNormalized
+          (!isStyleCompliantSummary(attempt.summary) || isLowSignalSummary(attempt.summary)) &&
+          fallbackNormalized
             ? fallbackNormalized
             : attempt.summary;
         setCache(cacheKey, resolvedSummary);
