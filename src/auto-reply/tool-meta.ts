@@ -187,15 +187,15 @@ function wrapMonospaceFence(value: string): string {
   if (!trimmed) {
     return trimmed;
   }
-  // Use inline code fences by default (single backtick), but expand
-  // to longer inline fences when content already contains backticks.
-  if (trimmed.startsWith("`") && trimmed.endsWith("`")) {
+  // Use triple backticks for WhatsApp monospace rendering and wrap in
+  // italics for additional visual distinction on tool summaries.
+  if (/^_?`{3,}.*`{3,}_?$/.test(trimmed)) {
     return trimmed;
   }
   const runs = trimmed.match(/`+/g) ?? [];
   const maxRun = runs.reduce((acc, run) => Math.max(acc, run.length), 0);
-  const fence = "`".repeat(Math.max(1, maxRun + 1));
-  return `${fence}${trimmed}${fence}`;
+  const fence = "`".repeat(Math.max(3, maxRun + 1));
+  return `_${fence}${trimmed}${fence}_`;
 }
 
 function shouldHideToolLabel(toolName?: string): boolean {

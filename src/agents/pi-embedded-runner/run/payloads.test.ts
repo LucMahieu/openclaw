@@ -59,7 +59,7 @@ describe("buildEmbeddedRunPayloads tool-error warnings", () => {
     });
 
     expect(payloads).toHaveLength(1);
-    expect(payloads[0]?.text).toBe("`💻 Running cd ~/workspace`");
+    expect(payloads[0]?.text).toBe("_```💻 Running cd ~/workspace```_");
   });
 
   it("can render tool summary lines without emoji", () => {

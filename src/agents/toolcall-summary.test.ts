@@ -23,7 +23,7 @@ describe("summarizeToolCallForUser", () => {
       args: { command: "ls" },
       fallbackMeta: "list files",
     });
-    expect(summary).toBe("list files");
+    expect(summary).toBe("Opgevraagd: files");
   });
 
   it("uses OpenRouter summary when available", async () => {
@@ -48,14 +48,14 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "run # Open",
     });
 
-    expect(summary).toBe("Opent WhatsApp Web en focust op het invoerveld.");
+    expect(summary).toBe("Geopend: WhatsApp Web en focust op het invoerveld");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     const requestBody = requestInit.body;
     expect(typeof requestBody).toBe("string");
     const body = JSON.parse(requestBody as string);
     expect(body.model).toBe("openai/gpt-5-nano");
-    expect(String(body.messages?.[0]?.content ?? "")).toContain("agent-progress verb");
+    expect(String(body.messages?.[0]?.content ?? "")).toContain("verleden tijd");
   });
 
   it("falls back when provider returns non-ok response", async () => {
@@ -72,7 +72,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "run # Click",
     });
 
-    expect(summary).toBe("Running # Click");
+    expect(summary).toBe("Uitgevoerd: # Click");
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -115,7 +115,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "run # Klik",
     });
 
-    expect(summary).toBe("Klikt op de knop en vult de invoer in.");
+    expect(summary).toBe("Geklikt: op de knop en vult de invoer in");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect((requestInit.headers as Record<string, string>).Authorization).toBe(
@@ -162,7 +162,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "run login",
     });
 
-    expect(summary).toBe("Vult de loginflow in en start authenticatie.");
+    expect(summary).toBe("Vult de loginflow in en start authenticatie");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect((requestInit.headers as Record<string, string>).Authorization).toBe(
@@ -177,7 +177,7 @@ describe("summarizeToolCallForUser", () => {
       toolCallId: "t6",
       args: {},
     });
-    expect(summary).toBe("Screenshot verwerken");
+    expect(summary).toBe("Screenshot verwerkt");
   });
 
   it("normalizes third-person lead into progressive style", async () => {
@@ -188,7 +188,7 @@ describe("summarizeToolCallForUser", () => {
       args: { command: "echo hi" },
       fallbackMeta: "run a command to print output.",
     });
-    expect(summary).toBe("Running a command to print output.");
+    expect(summary).toBe("Uitgevoerd: a command to print output");
   });
 
   it("retries once on empty length-truncated response", async () => {
@@ -221,7 +221,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "Screenshot verwerken",
     });
 
-    expect(summary).toBe("Analyzing image for button coordinates.");
+    expect(summary).toBe("Geanalyseerd: image for button coordinates");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -248,7 +248,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "run pwd",
     });
 
-    expect(summary).toBe("Running a command in terminal.");
+    expect(summary).toBe("Uitgevoerd: a command in terminal");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -294,7 +294,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "run fresh timeout scope",
     });
 
-    expect(summary).toBe("Running second attempt after timeout.");
+    expect(summary).toBe("Uitgevoerd: second attempt after timeout");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(attemptSignalsAborted).toEqual([false, false]);
   });
@@ -308,7 +308,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "session keen-shell",
     });
 
-    expect(summary).toBe("Checking process keen-shell for new output over 5s.");
+    expect(summary).toBe("Proces keen-shell gecontroleerd op nieuwe output (5s)");
   });
 
   it("uses natural cron fallback summary with schedule context", async () => {
@@ -326,7 +326,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "add job",
     });
 
-    expect(summary).toBe('Scheduling cron job "resume-notion" every 2m.');
+    expect(summary).toBe('Cronjob "resume-notion" ingepland (elke 2m)');
   });
 
   it("falls back after repeated timeout errors (hypothesis: timeout)", async () => {
@@ -342,7 +342,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "run timeout probe",
     });
 
-    expect(summary).toBe("Running timeout probe");
+    expect(summary).toBe("Uitgevoerd: timeout probe");
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -364,7 +364,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "run empty length probe",
     });
 
-    expect(summary).toBe("Running empty length probe");
+    expect(summary).toBe("Uitgevoerd: empty length probe");
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -386,7 +386,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "run empty stop probe",
     });
 
-    expect(summary).toBe("Running empty stop probe");
+    expect(summary).toBe("Uitgevoerd: empty stop probe");
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -406,7 +406,7 @@ describe("summarizeToolCallForUser", () => {
       fallbackMeta: "run bad request probe",
     });
 
-    expect(summary).toBe("Running bad request probe");
+    expect(summary).toBe("Uitgevoerd: bad request probe");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

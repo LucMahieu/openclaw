@@ -48,7 +48,7 @@ describe("tool meta formatting", () => {
   it("wraps full aggregate in inline backticks when monospace fence is enabled", () => {
     vi.stubEnv("HOME", home);
     const out = formatToolAggregate("exec", ["Running command"], { monospaceFence: true });
-    expect(out).toBe("`💻 Running command`");
+    expect(out).toBe("_```💻 Running command```_");
   });
 
   it("keeps bullet outside inline code fence when monospace fence is enabled", () => {
@@ -58,7 +58,7 @@ describe("tool meta formatting", () => {
       bulletPrefix: "□ ",
       includeEmoji: false,
     });
-    expect(out).toBe("□ `Running command`");
+    expect(out).toBe("□ _```Running command```_");
   });
 
   it("removes tool label prefixes in bullet mode", () => {

@@ -42,22 +42,33 @@ type SummaryAttemptResult = {
 
 const summaryCache = new Map<string, string>();
 const IMAGE_PATH_RE = /\.(png|jpe?g|webp|gif|bmp|tiff?|heic|heif|avif|svg)$/i;
-const PROGRESSIVE_LEAD_MAP: Array<[RegExp, string]> = [
-  [/^\s*run\b/i, "Running"],
-  [/^\s*analyze\b/i, "Analyzing"],
-  [/^\s*Runs\b/i, "Running"],
-  [/^\s*Analyzes\b/i, "Analyzing"],
-  [/^\s*Finds\b/i, "Finding"],
-  [/^\s*Opens\b/i, "Opening"],
-  [/^\s*Clicks\b/i, "Clicking"],
-  [/^\s*Switches\b/i, "Switching"],
-  [/^\s*Captures\b/i, "Capturing"],
-  [/^\s*Extracts\b/i, "Extracting"],
-  [/^\s*Returns\b/i, "Returning"],
-  [/^\s*Locates\b/i, "Locating"],
-  [/^\s*Waits\b/i, "Waiting"],
-  [/^\s*Uses\b/i, "Using"],
-  [/^\s*Types\b/i, "Typing"],
+const LEAD_REWRITE_MAP: Array<[RegExp, string]> = [
+  [/^\s*run(?:ning)?\s+(.+)$/i, "Uitgevoerd: $1"],
+  [/^\s*search(?:ing)?\s+for\s+(.+)$/i, "Gezocht naar $1"],
+  [/^\s*finding\s+(.+)$/i, "Gezocht naar $1"],
+  [/^\s*analy(?:s|z)(?:e|es|ing)\s+(.+)$/i, "Geanalyseerd: $1"],
+  [/^\s*opening\s+(.+)$/i, "Geopend: $1"],
+  [/^\s*clicking\s+(.+)$/i, "Geklikt: $1"],
+  [/^\s*switching\s+(.+)$/i, "Gewisseld: $1"],
+  [/^\s*capturing\s+(.+)$/i, "Vastgelegd: $1"],
+  [/^\s*extracting\s+(.+)$/i, "Geëxtraheerd: $1"],
+  [/^\s*returning\s+(.+)$/i, "Teruggegeven: $1"],
+  [/^\s*locating\s+(.+)$/i, "Gelokaliseerd: $1"],
+  [/^\s*waiting\s+(.+)$/i, "Gewacht op $1"],
+  [/^\s*using\s+(.+)$/i, "Gebruikt: $1"],
+  [/^\s*typing\s+(.+)$/i, "Getypt: $1"],
+  [/^\s*checking\s+(.+)$/i, "Gecontroleerd: $1"],
+  [/^\s*reading\s+(.+)$/i, "Gelezen: $1"],
+  [/^\s*list(?:ing)?\s+(.+)$/i, "Opgevraagd: $1"],
+  [/^\s*scheduling\s+(.+)$/i, "Ingepland: $1"],
+  [/^\s*spawning\s+(.+)$/i, "Gestart: $1"],
+  [/^\s*zoeken\s+naar\s+(.+)$/i, "Gezocht naar $1"],
+  [/^\s*zoekt\s+naar\s+(.+)$/i, "Gezocht naar $1"],
+  [/^\s*analyseren\s+(.+)$/i, "Geanalyseerd: $1"],
+  [/^\s*analyseert\s+(.+)$/i, "Geanalyseerd: $1"],
+  [/^\s*opent\s+(.+)$/i, "Geopend: $1"],
+  [/^\s*klikt\s+(.+)$/i, "Geklikt: $1"],
+  [/^\s*schakelt\s+(.+)$/i, "Gewisseld: $1"],
 ];
 
 function normalizeKey(value: string | undefined): string {
@@ -198,13 +209,34 @@ function sanitizeSummary(value: string | undefined): string | undefined {
   return `${trimmed.slice(0, MAX_RESPONSE_CHARS - 1).trimEnd()}…`;
 }
 
-function normalizeProgressiveLead(value: string): string {
-  for (const [pattern, replacement] of PROGRESSIVE_LEAD_MAP) {
-    if (pattern.test(value)) {
-      return value.replace(pattern, replacement);
+function normalizeSummaryStyle(value: string): string {
+  let out = value.replace(/\s+/g, " ").trim();
+  if (!out) {
+    return out;
+  }
+
+  out = out
+    .replace(/^[•●○□✓✗\-\s]+/u, "")
+    .replace(/^`+|`+$/g, "")
+    .trim();
+  out = out.replace(/^startup validatie deadline$/i, "Startup-validatiedeadline gecontroleerd");
+
+  for (const [pattern, replacement] of LEAD_REWRITE_MAP) {
+    if (pattern.test(out)) {
+      out = out.replace(pattern, replacement);
+      break;
     }
   }
-  return value;
+
+  if (/^[a-z0-9][a-z0-9 _-]{2,}$/i.test(out) && !/(ge|ver|be|ont)\w+/i.test(out)) {
+    out = `Bijgewerkt: ${out}`;
+  }
+
+  out = out.replace(/[.!?…]+$/g, "").trim();
+  if (out.length > 0) {
+    out = `${out[0].toUpperCase()}${out.slice(1)}`;
+  }
+  return out;
 }
 
 function extractStringArg(args: unknown, key: string): string | undefined {
@@ -245,18 +277,18 @@ function truncatePlain(value: string, max = 80): string {
 
 function humanizeEveryMs(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) {
-    return "on a recurring interval";
+    return "met een terugkerend interval";
   }
   if (ms % 3_600_000 === 0) {
     const h = Math.max(1, Math.round(ms / 3_600_000));
-    return `every ${h}h`;
+    return `elke ${h}u`;
   }
   if (ms % 60_000 === 0) {
     const m = Math.max(1, Math.round(ms / 60_000));
-    return `every ${m}m`;
+    return `elke ${m}m`;
   }
   const s = Math.max(1, Math.round(ms / 1000));
-  return `every ${s}s`;
+  return `elke ${s}s`;
 }
 
 function summarizeCronSchedule(schedule: unknown): string | undefined {
@@ -267,15 +299,15 @@ function summarizeCronSchedule(schedule: unknown): string | undefined {
   const kind = typeof record.kind === "string" ? record.kind.trim().toLowerCase() : "";
   if (kind === "every") {
     const everyMs = typeof record.everyMs === "number" ? record.everyMs : undefined;
-    return everyMs ? humanizeEveryMs(everyMs) : "on a recurring interval";
+    return everyMs ? humanizeEveryMs(everyMs) : "met een terugkerend interval";
   }
   if (kind === "at") {
     const at = typeof record.at === "string" ? record.at.trim() : "";
-    return at ? `at ${truncatePlain(at, 48)}` : "at a scheduled time";
+    return at ? `om ${truncatePlain(at, 48)}` : "op een gepland tijdstip";
   }
   if (kind === "cron") {
     const expr = typeof record.expr === "string" ? record.expr.trim() : "";
-    return expr ? `on cron ${truncatePlain(expr, 40)}` : "on a cron schedule";
+    return expr ? `met cron ${truncatePlain(expr, 40)}` : "met een cron-schema";
   }
   return undefined;
 }
@@ -284,87 +316,87 @@ function resolveProcessFallbackSummary(input: ToolCallSummaryInput): string | un
   const action = extractStringArg(input.args, "action")?.toLowerCase();
   const sessionId = extractStringArg(input.args, "sessionId");
   if (action === "list") {
-    return "Checking running terminal processes and recent session state.";
+    return "Lopende terminalprocessen en recente sessiestatus gecontroleerd";
   }
   if (action === "poll") {
     const timeoutMs = extractNumberArg(input.args, "timeout");
     if (sessionId && timeoutMs && timeoutMs > 0) {
-      return `Checking process ${sessionId} for new output over ${Math.ceil(timeoutMs / 1000)}s.`;
+      return `Proces ${sessionId} gecontroleerd op nieuwe output (${Math.ceil(timeoutMs / 1000)}s)`;
     }
     return sessionId
-      ? `Checking process ${sessionId} for new output and status.`
-      : "Checking process output and status.";
+      ? `Proces ${sessionId} gecontroleerd op output en status`
+      : "Procesoutput en sessiestatus gecontroleerd";
   }
   if (action === "log") {
     return sessionId
-      ? `Reading recent output from process ${sessionId}.`
-      : "Reading recent process output.";
+      ? `Recente output van proces ${sessionId} gelezen`
+      : "Recente procesoutput gelezen";
   }
   if (action === "write" || action === "send-keys" || action === "submit" || action === "paste") {
     return sessionId
-      ? `Sending input to process ${sessionId} to continue execution.`
-      : "Sending input to continue the running process.";
+      ? `Invoer naar proces ${sessionId} verstuurd om uitvoering te vervolgen`
+      : "Invoer verstuurd om het lopende proces te vervolgen";
   }
   if (action === "kill" || action === "remove" || action === "clear") {
     return sessionId
-      ? `Stopping process ${sessionId} and cleaning up session state.`
-      : "Stopping the running process and cleaning up session state.";
+      ? `Proces ${sessionId} gestopt en sessiestatus opgeschoond`
+      : "Lopend proces gestopt en sessiestatus opgeschoond";
   }
-  return sessionId
-    ? `Managing process session ${sessionId}.`
-    : "Managing terminal process sessions.";
+  return sessionId ? `Proces-sessie ${sessionId} beheerd` : "Terminalprocessessies beheerd";
 }
 
 function resolveCronFallbackSummary(input: ToolCallSummaryInput): string | undefined {
   const action = extractStringArg(input.args, "action")?.toLowerCase();
   if (action === "status") {
-    return "Checking cron scheduler status and active workers.";
+    return "Cronplanner en actieve workers gecontroleerd";
   }
   if (action === "list") {
-    return "Reviewing cron jobs and their next scheduled runs.";
+    return "Cronjobs en hun volgende runs gecontroleerd";
   }
   if (action === "add") {
     const job = extractRecordArg(input.args, "job");
     const name = job && typeof job.name === "string" ? truncatePlain(job.name, 64) : undefined;
     const schedule = summarizeCronSchedule(job?.schedule);
     if (name && schedule) {
-      return `Scheduling cron job "${name}" ${schedule}.`;
+      return `Cronjob "${name}" ingepland (${schedule})`;
     }
     if (name) {
-      return `Scheduling cron job "${name}" with active monitoring.`;
+      return `Cronjob "${name}" ingepland met monitoring`;
     }
     if (schedule) {
-      return `Scheduling a cron job ${schedule} for follow-up automation.`;
+      return `Cronjob ingepland (${schedule}) voor follow-up automatisering`;
     }
-    return "Scheduling a new cron job for follow-up automation.";
+    return "Nieuwe cronjob ingepland voor follow-up automatisering";
   }
   if (action === "update") {
     const id = extractStringArg(input.args, "jobId") ?? extractStringArg(input.args, "id");
-    return id ? `Updating cron job ${id} and next-run behavior.` : "Updating cron job settings.";
+    return id
+      ? `Cronjob ${id} bijgewerkt met nieuwe run-instellingen`
+      : "Cronjob-instellingen bijgewerkt";
   }
   if (action === "remove") {
     const id = extractStringArg(input.args, "jobId") ?? extractStringArg(input.args, "id");
     return id
-      ? `Removing cron job ${id} to stop future runs.`
-      : "Removing cron job and stopping future runs.";
+      ? `Cronjob ${id} verwijderd en toekomstige runs gestopt`
+      : "Cronjob verwijderd en toekomstige runs gestopt";
   }
   if (action === "run") {
     const id = extractStringArg(input.args, "jobId") ?? extractStringArg(input.args, "id");
-    return id ? `Running cron job ${id} immediately.` : "Running cron job immediately.";
+    return id ? `Cronjob ${id} direct uitgevoerd` : "Cronjob direct uitgevoerd";
   }
   if (action === "runs") {
     const id = extractStringArg(input.args, "jobId") ?? extractStringArg(input.args, "id");
     return id
-      ? `Checking recent run history for cron job ${id}.`
-      : "Checking recent cron run history.";
+      ? `Recente runhistorie van cronjob ${id} gecontroleerd`
+      : "Recente cron-runs gecontroleerd";
   }
   if (action === "wake") {
     const mode = extractStringArg(input.args, "mode")?.toLowerCase();
     return mode === "now"
-      ? "Waking the agent immediately to continue this workflow."
-      : "Scheduling the agent wake-up on the next heartbeat.";
+      ? "Agent direct gewekt om deze workflow te vervolgen"
+      : "Agent-wake-up ingepland op de volgende heartbeat";
   }
-  return "Managing cron automation and follow-up scheduling.";
+  return "Cronautomatisering en follow-up planning beheerd";
 }
 
 function resolveSessionsSpawnFallbackSummary(input: ToolCallSummaryInput): string | undefined {
@@ -377,9 +409,9 @@ function resolveSessionsSpawnFallbackSummary(input: ToolCallSummaryInput): strin
       ? truncatePlain(label, 90)
       : "assigned task";
   if (timeout && timeout > 0) {
-    return `Spawning sub-agent for ${target} with a ${Math.ceil(timeout)}s timeout.`;
+    return `Sub-agent gestart voor ${target} met timeout van ${Math.ceil(timeout)}s`;
   }
-  return `Spawning sub-agent for ${target} and monitoring completion.`;
+  return `Sub-agent gestart voor ${target} met actieve voortgangsmonitoring`;
 }
 
 function extractImagePathFromArgs(args: unknown): string | undefined {
@@ -407,24 +439,24 @@ function resolveFallbackSummary(input: ToolCallSummaryInput): string | undefined
 
   const explicit = sanitizeSummary(input.fallbackMeta);
   if (explicit) {
-    return normalizeProgressiveLead(explicit);
+    return sanitizeSummary(normalizeSummaryStyle(explicit));
   }
 
   if (toolName === "image") {
-    return "Screenshot verwerken";
+    return "Screenshot verwerkt";
   }
 
   if (toolName === "browser") {
     const action = extractStringArg(input.args, "action")?.toLowerCase();
     if (action === "screenshot" || action === "snapshot") {
-      return "Screenshot maken";
+      return "Screenshot gemaakt";
     }
   }
 
   if (toolName === "read") {
     const imagePath = extractImagePathFromArgs(input.args);
     if (imagePath) {
-      return "Screenshot analyseren";
+      return "Screenshot geanalyseerd";
     }
   }
 
@@ -514,17 +546,20 @@ export async function summarizeToolCallForUser(
           {
             role: "system",
             content:
-              "You summarize tool calls for chat users. Return exactly one short sentence (6-14 words), factual and specific. Start with an agent-progress verb in English (for example: Running, Analyzing, Clicking, Opening, Switching). No markdown, no bullet points, no IDs.",
+              "Je vat tool-calls samen voor chatgebruikers. Geef exact één korte zin (6-14 woorden), in het Nederlands, in de verleden tijd, met sentence case. Wees concreet: noem de uitgevoerde actie en het object/resultaat. Vermijd vage labels zoals 'startup validatie deadline'. Geen markdown, geen bullets, geen IDs.",
           },
           {
             role: "user",
             content: JSON.stringify(
               {
-                task: "Summarize this tool call for end-user visibility",
+                task: "Vat deze tool-call samen voor de eindgebruiker",
                 constraints: {
                   concise: true,
                   no_jargon: true,
                   avoid_information_overload: true,
+                  dutch_only: true,
+                  past_tense: true,
+                  sentence_case: true,
                 },
                 toolCall: {
                   runId: input.runId,
@@ -559,7 +594,7 @@ export async function summarizeToolCallForUser(
       const raw = (await res.json()) as OpenRouterChatCompletionResponse;
       const content = extractContentText(raw.choices?.[0]?.message?.content);
       const finishReason = raw.choices?.[0]?.finish_reason;
-      const summary = sanitizeSummary(normalizeProgressiveLead(content));
+      const summary = sanitizeSummary(normalizeSummaryStyle(content));
       return { ok: true, summary, finishReason, reason: summary ? undefined : "empty" };
     } finally {
       clearTimeout(timer);
