@@ -1,0 +1,176 @@
+{
+  "id": "gtd-core",
+  "name": "GTD Core",
+  "description": "Per-agent GTD harness with canonical JSON state and markdown views.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "scope": {
+        "type": "string",
+        "enum": ["per_agent"],
+        "default": "per_agent"
+      },
+      "mode": {
+        "type": "string",
+        "enum": ["always_on", "manual"],
+        "default": "always_on"
+      },
+      "storage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rootDir": {
+            "type": "string",
+            "default": "${STATE_DIR}/plugins/gtd-core"
+          }
+        }
+      },
+      "autonomy": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "followup": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "allowlistedDelivery": {
+                "type": "string",
+                "enum": ["auto_send"],
+                "default": "auto_send"
+              },
+              "nonAllowlistedDelivery": {
+                "type": "string",
+                "enum": ["draft_confirm"],
+                "default": "draft_confirm"
+              },
+              "autoSendAllowlist": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              }
+            }
+          }
+        }
+      },
+      "review": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dailyInboxZero": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "hour": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 23,
+                "default": 16
+              },
+              "minute": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 59,
+                "default": 30
+              },
+              "weekdaysOnly": {
+                "type": "boolean",
+                "default": true
+              }
+            }
+          },
+          "weekly": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "dayOfWeek": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 6,
+                "default": 5
+              },
+              "hour": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 23,
+                "default": 15
+              },
+              "minute": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 59,
+                "default": 0
+              }
+            }
+          },
+          "horizons": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "dayOfMonth": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 28,
+                "default": 1
+              },
+              "hour": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 23,
+                "default": 9
+              },
+              "minute": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 59,
+                "default": 0
+              }
+            }
+          }
+        }
+      },
+      "engage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "contexts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": ["deep_work", "computer", "calls", "errands", "agenda"]
+          }
+        }
+      },
+      "calendar": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["google"],
+            "default": "google"
+          },
+          "sync": {
+            "type": "string",
+            "enum": ["bidirectional"],
+            "default": "bidirectional"
+          },
+          "conflictPolicy": {
+            "type": "string",
+            "enum": ["gtd_wins"],
+            "default": "gtd_wins"
+          },
+          "syncIntervalMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 1440,
+            "default": 30
+          }
+        }
+      }
+    }
+  }
+}
