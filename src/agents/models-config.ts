@@ -103,9 +103,9 @@ function ensureOpenRouterProviderFromAgentDefaults(params: {
   return {
     ...params.providers,
     [OPENROUTER_PROVIDER_KEY]: {
+      ...existing,
       baseUrl: existing?.baseUrl ?? OPENROUTER_BASE_URL,
       api: existing?.api ?? "openai-completions",
-      ...existing,
       models: [...existingModels, ...toAdd],
     },
   };
