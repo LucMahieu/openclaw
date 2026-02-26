@@ -30,6 +30,10 @@ let importPiSdk = defaultImportPiSdk;
 const CODEX_PROVIDER = "openai-codex";
 const OPENAI_CODEX_GPT53_MODEL_ID = "gpt-5.3-codex";
 const OPENAI_CODEX_GPT53_SPARK_MODEL_ID = "gpt-5.3-codex-spark";
+const OPENROUTER_PROVIDER = "openrouter";
+const OPENROUTER_GEMINI_3_PRO_PREVIEW_MODEL_ID = "google/gemini-3-pro-preview";
+const OPENROUTER_GEMINI_31_PRO_PREVIEW_CUSTOMTOOLS_MODEL_ID =
+  "google/gemini-3.1-pro-preview-customtools";
 
 function applyOpenAICodexSparkFallback(models: ModelCatalogEntry[]): void {
   const hasSpark = models.some(
@@ -53,6 +57,32 @@ function applyOpenAICodexSparkFallback(models: ModelCatalogEntry[]): void {
     ...baseModel,
     id: OPENAI_CODEX_GPT53_SPARK_MODEL_ID,
     name: OPENAI_CODEX_GPT53_SPARK_MODEL_ID,
+  });
+}
+
+function applyOpenRouterGemini31CustomToolsFallback(models: ModelCatalogEntry[]): void {
+  const hasCustomTools = models.some(
+    (entry) =>
+      entry.provider === OPENROUTER_PROVIDER &&
+      entry.id.toLowerCase() === OPENROUTER_GEMINI_31_PRO_PREVIEW_CUSTOMTOOLS_MODEL_ID,
+  );
+  if (hasCustomTools) {
+    return;
+  }
+
+  const baseModel = models.find(
+    (entry) =>
+      entry.provider === OPENROUTER_PROVIDER &&
+      entry.id.toLowerCase() === OPENROUTER_GEMINI_3_PRO_PREVIEW_MODEL_ID,
+  );
+  if (!baseModel) {
+    return;
+  }
+
+  models.push({
+    ...baseModel,
+    id: OPENROUTER_GEMINI_31_PRO_PREVIEW_CUSTOMTOOLS_MODEL_ID,
+    name: OPENROUTER_GEMINI_31_PRO_PREVIEW_CUSTOMTOOLS_MODEL_ID,
   });
 }
 
@@ -140,6 +170,7 @@ export async function loadModelCatalog(params?: {
         models.push({ id, name, provider, contextWindow, reasoning, input });
       }
       applyOpenAICodexSparkFallback(models);
+      applyOpenRouterGemini31CustomToolsFallback(models);
 
       if (models.length === 0) {
         // If we found nothing, don't cache this result so we can try again.
