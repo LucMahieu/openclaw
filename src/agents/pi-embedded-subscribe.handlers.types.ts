@@ -67,6 +67,7 @@ export type EmbeddedPiSubscribeState = {
   compactionRetryReject?: (reason?: unknown) => void;
   compactionRetryPromise: Promise<void> | null;
   pendingToolHandlerTasks: Set<Promise<void>>;
+  pendingToolStartSummaryById: Map<string, Promise<void>>;
   unsubscribed: boolean;
 
   messagingToolSentTexts: string[];
@@ -160,6 +161,7 @@ export type ToolHandlerState = Pick<
   | "pendingMessagingTargets"
   | "pendingMessagingTexts"
   | "pendingMessagingMediaUrls"
+  | "pendingToolStartSummaryById"
   | "messagingToolSentTexts"
   | "messagingToolSentTextsNormalized"
   | "messagingToolSentMediaUrls"

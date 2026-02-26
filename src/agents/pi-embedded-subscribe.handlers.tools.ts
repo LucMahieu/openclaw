@@ -207,20 +207,30 @@ export async function handleToolExecutionStart(
     !ctx.state.toolSummaryById.has(toolCallId)
   ) {
     ctx.state.toolSummaryById.add(toolCallId);
-    const summarizedMeta = await summarizeToolCallForUser({
-      runId: ctx.params.runId,
-      toolName,
-      toolCallId,
-      args,
-      fallbackMeta: meta,
-    });
-    const nextMeta = normalizeSummaryMeta(summarizedMeta ?? meta);
-    const summary = ctx.state.toolMetaById.get(toolCallId);
-    if (summary) {
-      summary.meta = nextMeta;
-      ctx.state.toolMetaById.set(toolCallId, summary);
+    const startSummaryPromise = (async () => {
+      const summarizedMeta = await summarizeToolCallForUser({
+        runId: ctx.params.runId,
+        toolName,
+        toolCallId,
+        args,
+        fallbackMeta: meta,
+      });
+      const nextMeta = normalizeSummaryMeta(summarizedMeta ?? meta);
+      const summary = ctx.state.toolMetaById.get(toolCallId);
+      if (summary) {
+        summary.meta = nextMeta;
+        ctx.state.toolMetaById.set(toolCallId, summary);
+      }
+      await ctx.emitToolSummary(toolName, nextMeta, toolCallId);
+    })();
+    ctx.state.pendingToolStartSummaryById.set(toolCallId, startSummaryPromise);
+    try {
+      await startSummaryPromise;
+    } finally {
+      if (ctx.state.pendingToolStartSummaryById.get(toolCallId) === startSummaryPromise) {
+        ctx.state.pendingToolStartSummaryById.delete(toolCallId);
+      }
     }
-    await ctx.emitToolSummary(toolName, nextMeta, toolCallId);
   }
 
   // Track messaging tool sends (pending until confirmed in tool_execution_end).
@@ -397,6 +407,12 @@ export async function handleToolExecutionEnd(
   ctx.log.debug(
     `embedded run tool end: runId=${ctx.params.runId} tool=${toolName} toolCallId=${toolCallId}`,
   );
+
+  // Start/done must stay ordered per tool call; wait if the start summary is still in-flight.
+  const pendingStartSummary = ctx.state.pendingToolStartSummaryById.get(toolCallId);
+  if (pendingStartSummary) {
+    await pendingStartSummary.catch(() => undefined);
+  }
 
   if (ctx.params.onToolResult && ctx.shouldEmitToolResult()) {
     await ctx.emitToolDone(toolName, meta, isToolError ? "error" : "done", toolCallId);

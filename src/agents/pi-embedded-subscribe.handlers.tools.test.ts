@@ -42,6 +42,7 @@ function createTestContext(): {
       toolMetaById: new Map<string, ToolCallSummary>(),
       toolMetas: [],
       toolSummaryById: new Set<string>(),
+      pendingToolStartSummaryById: new Map<string, Promise<void>>(),
       unsubscribed: false,
       pendingMessagingTargets: new Map<string, MessagingToolSend>(),
       pendingMessagingTexts: new Map<string, string>(),
@@ -55,6 +56,7 @@ function createTestContext(): {
     shouldEmitToolResult: () => false,
     shouldEmitToolOutput: () => false,
     emitToolSummary: vi.fn(async () => {}),
+    emitToolDone: vi.fn(async () => {}),
     emitToolOutput: vi.fn(async () => {}),
     trimMessagingToolSent: vi.fn(),
     isSubscriptionClosed: () => false,
@@ -122,7 +124,61 @@ describe("handleToolExecutionStart read path checks", () => {
     expect(ctx.emitToolSummary).toHaveBeenCalledWith(
       "exec",
       "Opent de browser en selecteert het juiste element.",
+      "tool-openrouter-1",
     );
+  });
+});
+
+describe("tool summary ordering", () => {
+  it("waits for start summary completion before emitting done for same toolCallId", async () => {
+    const { ctx } = createTestContext();
+    ctx.params.onToolResult = vi.fn();
+    ctx.shouldEmitToolResult = () => true;
+    let resolveStartSummary: (() => void) | undefined;
+    ctx.emitToolSummary = vi.fn(
+      async () =>
+        await new Promise<void>((resolve) => {
+          resolveStartSummary = resolve;
+        }),
+    );
+    ctx.emitToolDone = vi.fn(async () => {});
+
+    const toolCallId = "tool-order-1";
+    const startPromise = handleToolExecutionStart(
+      ctx as never,
+      {
+        type: "tool_execution_start",
+        toolName: "exec",
+        toolCallId,
+        args: { command: "date" },
+      } as never,
+    );
+
+    // Wait until start handler reached summary emission and is now blocked there.
+    for (let i = 0; i < 20 && ctx.emitToolSummary.mock.calls.length === 0; i += 1) {
+      await Promise.resolve();
+    }
+
+    const endPromise = handleToolExecutionEnd(
+      ctx as never,
+      {
+        type: "tool_execution_end",
+        toolName: "exec",
+        toolCallId,
+        isError: false,
+        result: { ok: true },
+      } as never,
+    );
+
+    await Promise.resolve();
+    expect(ctx.emitToolDone).not.toHaveBeenCalled();
+
+    resolveStartSummary?.();
+    await Promise.all([startPromise, endPromise]);
+    const lastDoneCall = ctx.emitToolDone.mock.calls.at(-1) ?? [];
+    expect(lastDoneCall[0]).toBe("exec");
+    expect(lastDoneCall[2]).toBe("done");
+    expect(lastDoneCall[3]).toBe(toolCallId);
   });
 });
 

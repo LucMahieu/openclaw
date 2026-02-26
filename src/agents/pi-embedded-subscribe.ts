@@ -71,6 +71,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     compactionRetryReject: undefined,
     compactionRetryPromise: null,
     pendingToolHandlerTasks: new Set(),
+    pendingToolStartSummaryById: new Map(),
     unsubscribed: false,
     messagingToolSentTexts: [],
     messagingToolSentTextsNormalized: [],
@@ -675,6 +676,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     pendingMessagingTargets.clear();
     state.successfulCronAdds = 0;
     state.pendingMessagingMediaUrls.clear();
+    state.pendingToolStartSummaryById.clear();
     resetAssistantMessageState(0);
   };
 
