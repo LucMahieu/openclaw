@@ -155,10 +155,15 @@ function wrapMonospaceFence(value: string): string {
   if (!trimmed) {
     return trimmed;
   }
-  if (trimmed.startsWith("```") && trimmed.endsWith("```")) {
+  // Use inline code fences by default (single backtick), but expand
+  // to longer inline fences when content already contains backticks.
+  if (trimmed.startsWith("`") && trimmed.endsWith("`")) {
     return trimmed;
   }
-  return `\`\`\`${trimmed}\`\`\``;
+  const runs = trimmed.match(/`+/g) ?? [];
+  const maxRun = runs.reduce((acc, run) => Math.max(acc, run.length), 0);
+  const fence = "`".repeat(Math.max(1, maxRun + 1));
+  return `${fence}${trimmed}${fence}`;
 }
 
 function shouldHideToolLabel(toolName?: string): boolean {

@@ -45,10 +45,10 @@ describe("tool meta formatting", () => {
     expect(out).toContain("`~/dir/a.txt`");
   });
 
-  it("wraps full aggregate in triple-backtick monospace fence when enabled", () => {
+  it("wraps full aggregate in inline backticks when monospace fence is enabled", () => {
     vi.stubEnv("HOME", home);
     const out = formatToolAggregate("exec", ["Running command"], { monospaceFence: true });
-    expect(out).toBe("```💻 Running command```");
+    expect(out).toBe("`💻 Running command`");
   });
 
   it("keeps exec flags outside markdown and moves them to the front", () => {

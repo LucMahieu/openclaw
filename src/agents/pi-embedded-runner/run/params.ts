@@ -75,7 +75,7 @@ export type RunEmbeddedPiAgentParams = {
   verboseLevel?: VerboseLevel;
   reasoningLevel?: ReasoningLevel;
   toolResultFormat?: ToolResultFormat;
-  /** Wrap tool-summary lines in triple backticks (used for WhatsApp monospace rendering). */
+  /** Wrap tool-summary lines in inline backticks (used for WhatsApp monospace rendering). */
   toolResultMonospaceFence?: boolean;
   /** If true, suppress tool error warning payloads for this run (including mutating tools). */
   suppressToolErrorWarnings?: boolean;
