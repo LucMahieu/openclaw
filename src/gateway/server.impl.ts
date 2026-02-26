@@ -567,7 +567,8 @@ export async function startGatewayServer(
             runId: entry.runId,
             message:
               "Continue where you left off before the gateway reconnect. " +
-              "Do not restart finished work and avoid repeating text already sent.",
+              "Do not restart finished work and avoid repeating text already sent. " +
+              "Re-validate current bootstrap instructions and use helper-only computer-use routes (no raw xdotool/scrot/cliclick/osascript).",
             deliver: false,
             channel: INTERNAL_MESSAGE_CHANNEL,
             messageChannel: INTERNAL_MESSAGE_CHANNEL,

@@ -1,0 +1,30 @@
+{
+  "id": "computer-use-guard",
+  "name": "Computer Use Guard",
+  "description": "Hard-enforces helper-only VM/Mac computer-use command paths by blocking raw GUI exec calls.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mode": {
+        "type": "string",
+        "enum": ["enforce", "warn", "off"],
+        "default": "enforce"
+      },
+      "emergencyBypass": {
+        "type": "boolean",
+        "default": false
+      }
+    }
+  },
+  "uiHints": {
+    "mode": {
+      "label": "Guard Mode",
+      "help": "enforce=block, warn=log only, off=disabled"
+    },
+    "emergencyBypass": {
+      "label": "Emergency Bypass",
+      "help": "Temporary override to disable blocking without removing plugin config"
+    }
+  }
+}
