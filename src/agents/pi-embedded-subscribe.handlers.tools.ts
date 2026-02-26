@@ -19,7 +19,7 @@ import {
 import { inferToolMetaFromArgs } from "./pi-embedded-utils.js";
 import { buildToolMutationState, isSameToolMutationAction } from "./tool-mutation.js";
 import { normalizeToolName } from "./tool-policy.js";
-import { summarizeToolCallForUser } from "./toolcall-summary.js";
+import { normalizeToolSummaryForDisplay, summarizeToolCallForUser } from "./toolcall-summary.js";
 
 /** Track tool execution start times and args for after_tool_call hook */
 const toolStartData = new Map<string, { startTime: number; args: unknown }>();
@@ -69,13 +69,7 @@ function normalizeSummaryMeta(meta?: string): string | undefined {
   if (!trimmed) {
     return meta;
   }
-  if (/^\s*run\b/i.test(trimmed)) {
-    return trimmed.replace(/^\s*run\b/i, "Running");
-  }
-  if (/^\s*analyze\b/i.test(trimmed)) {
-    return trimmed.replace(/^\s*analyze\b/i, "Analyzing");
-  }
-  return trimmed;
+  return normalizeToolSummaryForDisplay(trimmed);
 }
 
 function pushUniqueMediaUrl(urls: string[], seen: Set<string>, value: unknown): void {

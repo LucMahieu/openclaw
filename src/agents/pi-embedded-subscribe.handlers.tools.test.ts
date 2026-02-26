@@ -123,7 +123,7 @@ describe("handleToolExecutionStart read path checks", () => {
     expect(ctx.emitToolSummary).toHaveBeenCalledTimes(1);
     expect(ctx.emitToolSummary).toHaveBeenCalledWith(
       "exec",
-      "Opent de browser en selecteert het juiste element.",
+      "Geopend: de browser en selecteert het juiste element",
       "tool-openrouter-1",
     );
   });

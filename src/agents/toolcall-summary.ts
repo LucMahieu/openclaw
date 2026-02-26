@@ -62,6 +62,8 @@ const LEAD_REWRITE_MAP: Array<[RegExp, string]> = [
   [/^\s*list(?:ing)?\s+(.+)$/i, "Opgevraagd: $1"],
   [/^\s*scheduling\s+(.+)$/i, "Ingepland: $1"],
   [/^\s*spawning\s+(.+)$/i, "Gestart: $1"],
+  [/^\s*nam\s+een\s+screenshot\s+(.+)$/i, "Screenshot genomen $1"],
+  [/^\s*took\s+a\s+screenshot\s+(.+)$/i, "Screenshot genomen $1"],
   [/^\s*zoeken\s+naar\s+(.+)$/i, "Gezocht naar $1"],
   [/^\s*zoekt\s+naar\s+(.+)$/i, "Gezocht naar $1"],
   [/^\s*analyseren\s+(.+)$/i, "Geanalyseerd: $1"],
@@ -209,7 +211,7 @@ function sanitizeSummary(value: string | undefined): string | undefined {
   return `${trimmed.slice(0, MAX_RESPONSE_CHARS - 1).trimEnd()}…`;
 }
 
-function normalizeSummaryStyle(value: string): string {
+export function normalizeToolSummaryForDisplay(value: string): string {
   let out = value.replace(/\s+/g, " ").trim();
   if (!out) {
     return out;
@@ -219,6 +221,10 @@ function normalizeSummaryStyle(value: string): string {
     .replace(/^[•●○□✓✗\-\s]+/u, "")
     .replace(/^`+|`+$/g, "")
     .trim();
+  // Force non-first-person status style.
+  out = out.replace(/^ik\s+heb\s+/i, "");
+  out = out.replace(/^ik\s+ben\s+/i, "");
+  out = out.replace(/^ik\s+/i, "");
   out = out.replace(/^startup validatie deadline$/i, "Startup-validatiedeadline gecontroleerd");
 
   for (const [pattern, replacement] of LEAD_REWRITE_MAP) {
@@ -439,7 +445,7 @@ function resolveFallbackSummary(input: ToolCallSummaryInput): string | undefined
 
   const explicit = sanitizeSummary(input.fallbackMeta);
   if (explicit) {
-    return sanitizeSummary(normalizeSummaryStyle(explicit));
+    return sanitizeSummary(normalizeToolSummaryForDisplay(explicit));
   }
 
   if (toolName === "image") {
@@ -594,7 +600,7 @@ export async function summarizeToolCallForUser(
       const raw = (await res.json()) as OpenRouterChatCompletionResponse;
       const content = extractContentText(raw.choices?.[0]?.message?.content);
       const finishReason = raw.choices?.[0]?.finish_reason;
-      const summary = sanitizeSummary(normalizeSummaryStyle(content));
+      const summary = sanitizeSummary(normalizeToolSummaryForDisplay(content));
       return { ok: true, summary, finishReason, reason: summary ? undefined : "empty" };
     } finally {
       clearTimeout(timer);

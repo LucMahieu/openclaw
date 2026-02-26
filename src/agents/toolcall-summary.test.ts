@@ -191,6 +191,28 @@ describe("summarizeToolCallForUser", () => {
     expect(summary).toBe("Uitgevoerd: a command to print output");
   });
 
+  it("removes first-person phrasing like 'Ik heb ...' from summaries", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const summary = await summarizeToolCallForUser({
+      toolName: "web_search",
+      toolCallId: "t7b",
+      args: { q: "weather curacao february" },
+      fallbackMeta: "Ik heb gezocht naar weer in Curacao tijdens februari",
+    });
+    expect(summary).toBe("Gezocht naar weer in Curacao tijdens februari");
+  });
+
+  it("rewrites screenshot first-person phrasing into neutral status form", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const summary = await summarizeToolCallForUser({
+      toolName: "image",
+      toolCallId: "t7c",
+      args: {},
+      fallbackMeta: "Ik nam een screenshot op mijn Mac",
+    });
+    expect(summary).toBe("Screenshot genomen op mijn Mac");
+  });
+
   it("retries once on empty length-truncated response", async () => {
     vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
     const fetchMock = vi
