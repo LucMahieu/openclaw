@@ -51,6 +51,29 @@ describe("tool meta formatting", () => {
     expect(out).toBe("`💻 Running command`");
   });
 
+  it("keeps bullet outside inline code fence when monospace fence is enabled", () => {
+    vi.stubEnv("HOME", home);
+    const out = formatToolAggregate("exec", ["Running command"], {
+      monospaceFence: true,
+      bulletPrefix: "□ ",
+      includeEmoji: false,
+    });
+    expect(out).toBe("□ `Running command`");
+  });
+
+  it("removes tool label prefixes in bullet mode", () => {
+    vi.stubEnv("HOME", home);
+    const out = formatToolAggregate(
+      "web_search",
+      ["Searching Maastricht University requirements"],
+      {
+        bulletPrefix: "□ ",
+        includeEmoji: false,
+      },
+    );
+    expect(out).toBe("□ Searching Maastricht University requirements");
+  });
+
   it("can render aggregate without emoji", () => {
     vi.stubEnv("HOME", home);
     const out = formatToolAggregate("exec", ["Running command"], { includeEmoji: false });

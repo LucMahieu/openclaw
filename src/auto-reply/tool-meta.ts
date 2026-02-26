@@ -82,16 +82,17 @@ export function formatToolAggregate(
   const meta = allSegments.join("; ");
   const formattedMeta = formatMetaForDisplay(toolName, meta, options?.markdown);
   const body = bulletPrefix
-    ? hideLabel
-      ? formattedMeta
-      : `${display.label}: ${formattedMeta}`
+    ? formattedMeta
     : hideLabel
       ? prefix
         ? `${prefix} ${formattedMeta}`
         : formattedMeta
       : `${prefix}: ${formattedMeta}`;
-  const rendered = bulletPrefix ? `${bulletPrefix}${body}` : body;
-  return options?.monospaceFence ? wrapMonospaceFence(rendered) : rendered;
+  if (bulletPrefix) {
+    const fencedBody = options?.monospaceFence ? wrapMonospaceFence(body) : body;
+    return `${bulletPrefix}${fencedBody}`;
+  }
+  return options?.monospaceFence ? wrapMonospaceFence(body) : body;
 }
 
 export function formatToolPrefix(
