@@ -18,6 +18,7 @@ import type {
 } from "./pi-embedded-subscribe.handlers.types.js";
 import type { SubscribeEmbeddedPiSessionParams } from "./pi-embedded-subscribe.types.js";
 import { formatReasoningMessage, stripDowngradedToolCallText } from "./pi-embedded-utils.js";
+import { TOOL_BULLETS } from "./tool-bullets.js";
 import { hasNonzeroUsage, normalizeUsage, type UsageLike } from "./usage.js";
 
 const THINKING_TAG_SCAN_RE = /<\s*(\/?)\s*(?:think(?:ing)?|thought|antthinking)\s*>/gi;
@@ -68,6 +69,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     compactionRetryResolve: undefined,
     compactionRetryReject: undefined,
     compactionRetryPromise: null,
+    pendingToolHandlerTasks: new Set(),
     unsubscribed: false,
     messagingToolSentTexts: [],
     messagingToolSentTextsNormalized: [],
@@ -91,6 +93,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
   const toolMetas = state.toolMetas;
   const toolMetaById = state.toolMetaById;
   const toolSummaryById = state.toolSummaryById;
+  const pendingToolHandlerTasks = state.pendingToolHandlerTasks;
   const messagingToolSentTexts = state.messagingToolSentTexts;
   const messagingToolSentTextsNormalized = state.messagingToolSentTextsNormalized;
   const messagingToolSentTargets = state.messagingToolSentTargets;
@@ -306,6 +309,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     typeof params.shouldEmitToolOutput === "function"
       ? params.shouldEmitToolOutput()
       : params.verboseLevel === "full";
+  const isSubscriptionClosed = () => state.unsubscribed;
   const formatToolOutputBlock = (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -316,19 +320,63 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     }
     return `\`\`\`txt\n${trimmed}\n\`\`\``;
   };
-  const emitToolSummary = (toolName?: string, meta?: string) => {
-    if (!params.onToolResult) {
+  const bulletStyle = params.toolResultBulletStyle;
+  const shouldEmitToolDone = params.toolResultEmitDone === true;
+  const emitToolSummary = async (toolName?: string, meta?: string) => {
+    if (!params.onToolResult || state.unsubscribed) {
       return;
     }
+    const bulletPrefix = bulletStyle ? TOOL_BULLETS[bulletStyle].running : undefined;
     const agg = formatToolAggregate(toolName, meta ? [meta] : undefined, {
       markdown: useMarkdown,
+      monospaceFence: params.toolResultMonospaceFence,
+      includeEmoji: bulletPrefix ? false : params.toolResultIncludeEmoji,
+      bulletPrefix,
     });
     const { text: cleanedText, mediaUrls } = parseReplyDirectives(agg);
     if (!cleanedText && (!mediaUrls || mediaUrls.length === 0)) {
       return;
     }
+    if (state.unsubscribed) {
+      return;
+    }
     try {
-      void params.onToolResult({
+      await params.onToolResult({
+        text: cleanedText,
+        mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
+      });
+      log.debug(
+        `tool summary sent: runId=${params.runId} tool=${toolName ?? "unknown"} sentAt=${Date.now()}`,
+      );
+    } catch {
+      // ignore tool result delivery failures
+    }
+  };
+  const emitToolDone = async (
+    toolName?: string,
+    meta?: string,
+    status: "done" | "error" = "done",
+  ) => {
+    if (!params.onToolResult || state.unsubscribed || !bulletStyle || !shouldEmitToolDone) {
+      return;
+    }
+    const bullets = TOOL_BULLETS[bulletStyle];
+    const bulletPrefix = status === "error" ? bullets.error : bullets.done;
+    const agg = formatToolAggregate(toolName, meta ? [meta] : undefined, {
+      markdown: useMarkdown,
+      monospaceFence: params.toolResultMonospaceFence,
+      includeEmoji: false,
+      bulletPrefix,
+    });
+    const { text: cleanedText, mediaUrls } = parseReplyDirectives(agg);
+    if (!cleanedText && (!mediaUrls || mediaUrls.length === 0)) {
+      return;
+    }
+    if (state.unsubscribed) {
+      return;
+    }
+    try {
+      await params.onToolResult({
         text: cleanedText,
         mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
       });
@@ -336,20 +384,25 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       // ignore tool result delivery failures
     }
   };
-  const emitToolOutput = (toolName?: string, meta?: string, output?: string) => {
-    if (!params.onToolResult || !output) {
+  const emitToolOutput = async (toolName?: string, meta?: string, output?: string) => {
+    if (!params.onToolResult || !output || state.unsubscribed) {
       return;
     }
     const agg = formatToolAggregate(toolName, meta ? [meta] : undefined, {
       markdown: useMarkdown,
+      monospaceFence: params.toolResultMonospaceFence,
+      includeEmoji: params.toolResultIncludeEmoji,
     });
     const message = `${agg}\n${formatToolOutputBlock(output)}`;
     const { text: cleanedText, mediaUrls } = parseReplyDirectives(message);
     if (!cleanedText && (!mediaUrls || mediaUrls.length === 0)) {
       return;
     }
+    if (state.unsubscribed) {
+      return;
+    }
     try {
-      void params.onToolResult({
+      await params.onToolResult({
         text: cleanedText,
         mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
       });
@@ -600,6 +653,19 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       state.lastAssistant = msg;
     }
   };
+  const trackToolHandlerTask = (promise: Promise<unknown>) => {
+    const settled = promise.then(
+      () => undefined,
+      () => undefined,
+    );
+    pendingToolHandlerTasks.add(settled);
+    void settled.finally(() => pendingToolHandlerTasks.delete(settled));
+  };
+  const waitForToolHandlerTasks = async () => {
+    while (pendingToolHandlerTasks.size > 0) {
+      await Promise.allSettled(pendingToolHandlerTasks);
+    }
+  };
 
   const ctx: EmbeddedPiSubscribeContext = {
     params,
@@ -612,6 +678,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     shouldEmitToolResult,
     shouldEmitToolOutput,
     emitToolSummary,
+    emitToolDone,
     emitToolOutput,
     stripBlockTags,
     emitBlockChunk,
@@ -631,6 +698,9 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     incrementCompactionCount,
     getUsageTotals,
     getCompactionCount: () => compactionCount,
+    isSubscriptionClosed,
+    trackToolHandlerTask,
+    waitForToolHandlerTasks,
   };
 
   const sessionUnsubscribe = params.session.subscribe(createEmbeddedPiSessionEventHandler(ctx));
@@ -685,6 +755,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     getLastToolError: () => (state.lastToolError ? { ...state.lastToolError } : undefined),
     getUsageTotals,
     getCompactionCount: () => compactionCount,
+    waitForToolHandlerTasks,
     waitForCompactionRetry: () => {
       // Reject after unsubscribe so callers treat it as cancellation, not success
       if (state.unsubscribed) {

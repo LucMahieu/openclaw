@@ -9,6 +9,17 @@ import {
 import type { WebInboundMessage } from "./inbound.js";
 
 installWebAutoReplyTestHomeHooks();
+const recoveryMock = vi.hoisted(() => ({
+  recoverInterruptedRuns: vi.fn(async () => {}),
+}));
+
+vi.mock("../gateway/chat-run-recovery.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../gateway/chat-run-recovery.js")>();
+  return {
+    ...actual,
+    recoverInterruptedRuns: (...args: unknown[]) => recoveryMock.recoverInterruptedRuns(...args),
+  };
+});
 
 function createRuntime() {
   return {
@@ -85,6 +96,7 @@ describe("web auto-reply", () => {
   });
 
   it("reconnects after a connection close", async () => {
+    recoveryMock.recoverInterruptedRuns.mockClear();
     const closeResolvers: Array<() => void> = [];
     const sleep = vi.fn(async () => {});
     const listenerFactory = vi.fn(async () => {
@@ -113,11 +125,31 @@ describe("web auto-reply", () => {
     );
     expect(listenerFactory).toHaveBeenCalledTimes(2);
     expect(runtime.error).toHaveBeenCalledWith(expect.stringContaining("Retry 1"));
+    expect(recoveryMock.recoverInterruptedRuns).toHaveBeenCalled();
 
     controller.abort();
     closeResolvers[1]?.();
     await Promise.resolve();
     await run;
+  });
+
+  it("invokes interrupted WhatsApp run recovery after connect", async () => {
+    recoveryMock.recoverInterruptedRuns.mockClear();
+    const listenerFactory = vi.fn(async () => ({
+      close: vi.fn(),
+    }));
+
+    await monitorWebChannel(false, listenerFactory as never, false, async () => ({ text: "ok" }));
+
+    expect(listenerFactory).toHaveBeenCalledTimes(1);
+    expect(recoveryMock.recoverInterruptedRuns).toHaveBeenCalledTimes(1);
+    expect(recoveryMock.recoverInterruptedRuns).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "whatsapp_auto_reply",
+        accountId: "default",
+        resume: expect.any(Function),
+      }),
+    );
   });
   it("forces reconnect when watchdog closes without onClose", async () => {
     vi.useFakeTimers();

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
+import type { ImageContent, TextContent } from "@mariozechner/pi-ai";
 import {
   type ExecAsk,
   type ExecHost,
@@ -119,6 +120,32 @@ export type ExecToolDetails =
       cwd?: string;
       nodeId?: string;
     };
+
+// ---------------------------------------------------------------------------
+// Screenshot injection helper
+// When exec output contains `[screenshot_b64]: <base64>`, strip that line and
+// return both a text block and an image block so the screenshot lands directly
+// in the model's context window without a separate `image` tool call.
+// ---------------------------------------------------------------------------
+const SCREENSHOT_B64_RE = /\[screenshot_b64\]: ([A-Za-z0-9+/=\n]+)/;
+
+function injectScreenshotIntoToolResult(output: string): Array<TextContent | ImageContent> {
+  const match = SCREENSHOT_B64_RE.exec(output);
+  if (!match) {
+    return [{ type: "text", text: output }];
+  }
+  // Remove the marker line and collapse excess blank lines.
+  const cleanText = output
+    .replace(SCREENSHOT_B64_RE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  // Strip any embedded newlines from the base64 string (line-wrapped encoders).
+  const b64 = match[1].replace(/\s/g, "");
+  return [
+    { type: "text", text: cleanText || "(screenshot captured)" },
+    { type: "image", data: b64, mimeType: "image/png" },
+  ];
+}
 
 function extractScriptTargetFromCommand(
   command: string,
@@ -680,12 +707,7 @@ export function createExecTool(
         const success = typeof payloadObj.success === "boolean" ? payloadObj.success : false;
         const exitCode = typeof payloadObj.exitCode === "number" ? payloadObj.exitCode : null;
         return {
-          content: [
-            {
-              type: "text",
-              text: stdout || stderr || errorText || "",
-            },
-          ],
+          content: injectScreenshotIntoToolResult(stdout || stderr || errorText || ""),
           details: {
             status: success ? "completed" : "failed",
             exitCode,
@@ -1069,12 +1091,9 @@ export function createExecTool(
               return;
             }
             resolve({
-              content: [
-                {
-                  type: "text",
-                  text: `${getWarningText()}${outcome.aggregated || "(no output)"}`,
-                },
-              ],
+              content: injectScreenshotIntoToolResult(
+                `${getWarningText()}${outcome.aggregated || "(no output)"}`,
+              ),
               details: {
                 status: "completed",
                 exitCode: outcome.exitCode ?? 0,

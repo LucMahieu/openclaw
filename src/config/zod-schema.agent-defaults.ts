@@ -54,6 +54,23 @@ export const AgentDefaultsSchema = z
     envelopeElapsed: z.union([z.literal("on"), z.literal("off")]).optional(),
     contextTokens: z.number().int().positive().optional(),
     cliBackends: z.record(z.string(), CliBackendSchema).optional(),
+    selfImprovement: z
+      .object({
+        handoff: z
+          .object({
+            monitorEnabled: z.boolean().optional(),
+            monitorIntervalSeconds: z.number().int().positive().optional(),
+            monitorMaxAttempts: z.number().int().positive().optional(),
+            staleTimeoutSeconds: z.number().int().positive().optional(),
+            requirePushAck: z.boolean().optional(),
+            autoRescheduleOnInFlight: z.boolean().optional(),
+            retryBackoffSeconds: z.array(z.number().int().positive()).optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     memorySearch: MemorySearchSchema,
     contextPruning: z
       .object({

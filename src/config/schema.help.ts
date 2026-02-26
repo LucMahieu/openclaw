@@ -295,6 +295,22 @@ export const FIELD_HELP: Record<string, string> = {
   "agents.defaults.imageMaxDimensionPx":
     "Max image side length in pixels when sanitizing transcript/tool-result image payloads (default: 1200).",
   "agents.defaults.cliBackends": "Optional CLI backends for text-only fallback (claude-cli, etc.).",
+  "agents.defaults.selfImprovement":
+    "Self-improvement orchestration settings for Codex handoff and watchdog behavior.",
+  "agents.defaults.selfImprovement.handoff.monitorEnabled":
+    "Enable Codex handoff watchdog monitoring (default: true).",
+  "agents.defaults.selfImprovement.handoff.monitorIntervalSeconds":
+    "Watchdog check interval in seconds (default: 120).",
+  "agents.defaults.selfImprovement.handoff.monitorMaxAttempts":
+    "Maximum monitor attempts before terminal failure (default: 90).",
+  "agents.defaults.selfImprovement.handoff.staleTimeoutSeconds":
+    "No-progress timeout in seconds before a task is considered stale (default: 600).",
+  "agents.defaults.selfImprovement.handoff.requirePushAck":
+    "Require explicit CODEx_STATUS push events for completion certainty (default: true).",
+  "agents.defaults.selfImprovement.handoff.autoRescheduleOnInFlight":
+    "When true, keep watchdog monitors active while tasks are in-flight (default: true).",
+  "agents.defaults.selfImprovement.handoff.retryBackoffSeconds":
+    "Retry backoff schedule (seconds) for stale/error recovery (default: [60,120,300]).",
   "agents.defaults.humanDelay.mode": 'Delay style for block replies ("off", "natural", "custom").',
   "agents.defaults.humanDelay.minMs": "Minimum delay in ms for custom humanDelay (default: 800).",
   "agents.defaults.humanDelay.maxMs": "Maximum delay in ms for custom humanDelay (default: 2500).",
@@ -383,6 +399,10 @@ export const FIELD_HELP: Record<string, string> = {
   "channels.whatsapp.selfChatMode": "Same-phone setup (bot uses your personal WhatsApp number).",
   "channels.whatsapp.debounceMs":
     "Debounce window (ms) for batching rapid consecutive messages from the same sender (0 to disable).",
+  "channels.whatsapp.toolSummaryEmitDone":
+    "Emit a second tool-call summary message when a tool completes (default: false).",
+  "channels.whatsapp.toolBarBulletStyle":
+    'Bullet style for tool-call summary messages: "circles" (○/●) or "checkboxes" (□/✓). Overrides ui.toolBarBulletStyle for WhatsApp. Default: "checkboxes".',
   "channels.signal.dmPolicy":
     'Direct message access control ("pairing" recommended). "open" requires channels.signal.allowFrom=["*"].',
   "channels.imessage.dmPolicy":

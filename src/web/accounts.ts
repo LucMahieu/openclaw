@@ -28,6 +28,9 @@ export type ResolvedWhatsAppAccount = {
   ackReaction?: WhatsAppAccountConfig["ackReaction"];
   groups?: WhatsAppAccountConfig["groups"];
   debounceMs?: number;
+  toolSummaryEmoji?: boolean;
+  toolSummaryEmitDone?: boolean;
+  toolBarBulletStyle?: "circles" | "checkboxes";
 };
 
 const { listConfiguredAccountIds, listAccountIds, resolveDefaultAccountId } =
@@ -148,6 +151,13 @@ export function resolveWhatsAppAccount(params: {
     ackReaction: accountCfg?.ackReaction ?? rootCfg?.ackReaction,
     groups: accountCfg?.groups ?? rootCfg?.groups,
     debounceMs: accountCfg?.debounceMs ?? rootCfg?.debounceMs,
+    toolSummaryEmoji: accountCfg?.toolSummaryEmoji ?? rootCfg?.toolSummaryEmoji ?? true,
+    toolSummaryEmitDone: accountCfg?.toolSummaryEmitDone ?? rootCfg?.toolSummaryEmitDone ?? false,
+    toolBarBulletStyle:
+      accountCfg?.toolBarBulletStyle ??
+      rootCfg?.toolBarBulletStyle ??
+      params.cfg.ui?.toolBarBulletStyle ??
+      "checkboxes",
   };
 }
 

@@ -11,6 +11,21 @@ metadata:
 
 Use **bash** (with optional background mode) for all coding agent work. Simple and effective.
 
+## 🚨 OpenClaw Source Changes → Altijd Builden + Herstarten
+
+Als de taak wijzigingen maakt in `/home/luc-mahieu/.openclaw/workspace/projects/openclaw/src/`:
+
+1. **Build de code**: `cd ~/.openclaw/workspace/projects/openclaw && npm run build`
+2. **Verifieer** dat de wijziging in de dist zit: `grep -c "jouw_keyword" dist/*.js`
+3. **Herstart de gateway**: `openclaw gateway restart`
+4. **Test** of de wijziging live werkt
+
+**Zonder deze stappen zijn code changes NIET live.** De gateway draait via symlink op de lokale dist/. Na `npm run build` + restart zijn changes automatisch actief.
+
+Zie ook: `skills/openclaw-update/SKILL.md` voor de volledige procedure.
+
+---
+
 ## ⚠️ PTY Mode Required!
 
 Coding agents (Codex, Claude Code, Pi) are **interactive terminal applications** that need a pseudo-terminal (PTY) to work correctly. Without PTY, you'll get broken output, missing colors, or the agent may hang.
@@ -249,6 +264,49 @@ When you spawn coding agents in the background, keep the user in the loop.
 - If you kill a session, immediately say you killed it and why.
 
 This prevents the user from seeing only "Agent failed before reply" and having no idea what happened.
+
+## 🔔 Verplicht: Cron Job voor Monitoring (ALTIJD INSTELLEN)
+
+**Elke keer dat je een Codex/Claude Code sessie start in de achtergrond, stel je DIRECT daarna een cron job in om de voortgang te checken.** Wacht NOOIT op de gebruiker om te vragen hoe het gaat.
+
+```python
+# Direct na het spawnen van een agent sessie:
+cron.add(job={
+    "name": "Check Codex sessie <sessionId>",
+    "schedule": {"kind": "at", "at": "<nu + 2 minuten>"},
+    "payload": {
+        "kind": "agentTurn",
+        "message": "Check de voortgang van Codex sessie <sessionId> via process(action=log). Als het klaar is: test het resultaat en rapporteer. Als het nog bezig is: stel een nieuwe cron job in voor over 2 minuten. Als het gecrasht is: analyseer de fout en herstart Codex met een verbeterde prompt."
+    },
+    "sessionTarget": "isolated"
+})
+```
+
+**Waarom:** Codex sessies kunnen crashen, hangen, of onverwacht stoppen. Als je niet proactief monitort, merk je het pas als de gebruiker vraagt "hoe gaat het?". Dat is te laat.
+
+**Patroon:**
+
+1. Spawn Codex → `sessionId = "keen-pine"`
+2. Direct daarna: cron job instellen voor check over 2 min
+3. Check: klaar? → test + rapporteer. Bezig? → nieuwe cron. Crash? → herstart.
+4. Herhaal tot done.
+
+### Push Handshake (verplicht)
+
+Als Codex status heeft, laat Codex direct een push-event sturen:
+
+```bash
+openclaw system event --text 'CODEx_STATUS progress taskId=<taskId> sessionId=<sessionId> summary="running"' --mode now
+openclaw system event --text 'CODEx_STATUS waiting-input taskId=<taskId> sessionId=<sessionId> summary="need user decision"' --mode now
+openclaw system event --text 'CODEx_STATUS done taskId=<taskId> sessionId=<sessionId> summary="implemented + tested"' --mode now
+openclaw system event --text 'CODEx_STATUS error taskId=<taskId> sessionId=<sessionId> summary="failing tests"' --mode now
+```
+
+Fallback als dit command faalt:
+
+- Zet direct een monitor-cron op korte interval (1-2 min)
+- Meld in de chat dat push faalde en watchdog actief blijft
+- Stop pas met monitoren na terminale status
 
 ---
 

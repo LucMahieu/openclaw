@@ -2,7 +2,11 @@ import fs from "node:fs/promises";
 import type { ThinkLevel } from "../../auto-reply/thinking.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import { enqueueCommandInLane } from "../../process/command-queue.js";
-import { isMarkdownCapableMessageChannel } from "../../utils/message-channel.js";
+import {
+  isMarkdownCapableMessageChannel,
+  normalizeMessageChannel,
+} from "../../utils/message-channel.js";
+import { resolveWhatsAppAccount } from "../../web/accounts.js";
 import { resolveOpenClawAgentDir } from "../agent-paths.js";
 import {
   isProfileInCooldown,
@@ -188,6 +192,27 @@ export async function runEmbeddedPiAgent(
         ? "markdown"
         : "plain"
       : "markdown");
+  const resolvedToolResultMonospaceFence =
+    params.toolResultMonospaceFence ?? normalizeMessageChannel(channelHint) === "whatsapp";
+  const normalizedMessageChannel = normalizeMessageChannel(channelHint);
+  const whatsappAccount =
+    normalizedMessageChannel === "whatsapp" && params.config
+      ? resolveWhatsAppAccount({
+          cfg: params.config,
+          accountId: params.agentAccountId,
+        })
+      : undefined;
+  const resolvedToolResultIncludeEmoji =
+    params.toolResultIncludeEmoji ??
+    (normalizedMessageChannel === "whatsapp" ? (whatsappAccount?.toolSummaryEmoji ?? true) : true);
+  const resolvedToolResultBulletStyle =
+    params.toolResultBulletStyle ??
+    (normalizedMessageChannel === "whatsapp" ? whatsappAccount?.toolBarBulletStyle : undefined);
+  const resolvedToolResultEmitDone =
+    params.toolResultEmitDone ??
+    (normalizedMessageChannel === "whatsapp"
+      ? (whatsappAccount?.toolSummaryEmitDone ?? false)
+      : false);
   const isProbeSession = params.sessionId?.startsWith("probe-") ?? false;
 
   return enqueueSession(() =>
@@ -519,6 +544,10 @@ export async function runEmbeddedPiAgent(
             verboseLevel: params.verboseLevel,
             reasoningLevel: params.reasoningLevel,
             toolResultFormat: resolvedToolResultFormat,
+            toolResultMonospaceFence: resolvedToolResultMonospaceFence,
+            toolResultIncludeEmoji: resolvedToolResultIncludeEmoji,
+            toolResultBulletStyle: resolvedToolResultBulletStyle,
+            toolResultEmitDone: resolvedToolResultEmitDone,
             execOverrides: params.execOverrides,
             bashElevated: params.bashElevated,
             timeoutMs: params.timeoutMs,
@@ -999,6 +1028,8 @@ export async function runEmbeddedPiAgent(
             verboseLevel: params.verboseLevel,
             reasoningLevel: params.reasoningLevel,
             toolResultFormat: resolvedToolResultFormat,
+            toolResultMonospaceFence: resolvedToolResultMonospaceFence,
+            toolResultIncludeEmoji: resolvedToolResultIncludeEmoji,
             suppressToolErrorWarnings: params.suppressToolErrorWarnings,
             inlineToolResultsAllowed: false,
           });

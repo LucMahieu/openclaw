@@ -761,6 +761,10 @@ export async function runEmbeddedAttempt(
         verboseLevel: params.verboseLevel,
         reasoningMode: params.reasoningLevel ?? "off",
         toolResultFormat: params.toolResultFormat,
+        toolResultMonospaceFence: params.toolResultMonospaceFence,
+        toolResultIncludeEmoji: params.toolResultIncludeEmoji,
+        toolResultBulletStyle: params.toolResultBulletStyle,
+        toolResultEmitDone: params.toolResultEmitDone,
         shouldEmitToolResult: params.shouldEmitToolResult,
         shouldEmitToolOutput: params.shouldEmitToolOutput,
         onToolResult: params.onToolResult,
@@ -783,6 +787,7 @@ export async function runEmbeddedAttempt(
         toolMetas,
         unsubscribe,
         waitForCompactionRetry,
+        waitForToolHandlerTasks,
         getMessagingToolSentTexts,
         getMessagingToolSentMediaUrls,
         getMessagingToolSentTargets,
@@ -1083,6 +1088,10 @@ export async function runEmbeddedAttempt(
             throw err;
           }
         }
+
+        // Tool summaries and output callbacks are async; drain them before returning
+        // so downstream channels cannot emit final reply before late tool updates.
+        await waitForToolHandlerTasks();
 
         // Append cache-TTL timestamp AFTER prompt + compaction retry completes.
         // Previously this was before the prompt, which caused a custom entry to be

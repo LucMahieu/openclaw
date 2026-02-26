@@ -19,6 +19,7 @@ import {
 import { inferToolMetaFromArgs } from "./pi-embedded-utils.js";
 import { buildToolMutationState, isSameToolMutationAction } from "./tool-mutation.js";
 import { normalizeToolName } from "./tool-policy.js";
+import { summarizeToolCallForUser } from "./toolcall-summary.js";
 
 /** Track tool execution start times and args for after_tool_call hook */
 const toolStartData = new Map<string, { startTime: number; args: unknown }>();
@@ -61,6 +62,20 @@ function extendExecMeta(toolName: string, args: unknown, meta?: string): string 
   }
   const suffix = flags.join(" · ");
   return meta ? `${meta} · ${suffix}` : suffix;
+}
+
+function normalizeSummaryMeta(meta?: string): string | undefined {
+  const trimmed = meta?.trim();
+  if (!trimmed) {
+    return meta;
+  }
+  if (/^\s*run\b/i.test(trimmed)) {
+    return trimmed.replace(/^\s*run\b/i, "Running");
+  }
+  if (/^\s*analyze\b/i.test(trimmed)) {
+    return trimmed.replace(/^\s*analyze\b/i, "Analyzing");
+  }
+  return trimmed;
 }
 
 function pushUniqueMediaUrl(urls: string[], seen: Set<string>, value: unknown): void {
@@ -192,7 +207,20 @@ export async function handleToolExecutionStart(
     !ctx.state.toolSummaryById.has(toolCallId)
   ) {
     ctx.state.toolSummaryById.add(toolCallId);
-    ctx.emitToolSummary(toolName, meta);
+    const summarizedMeta = await summarizeToolCallForUser({
+      runId: ctx.params.runId,
+      toolName,
+      toolCallId,
+      args,
+      fallbackMeta: meta,
+    });
+    const nextMeta = normalizeSummaryMeta(summarizedMeta ?? meta);
+    const summary = ctx.state.toolMetaById.get(toolCallId);
+    if (summary) {
+      summary.meta = nextMeta;
+      ctx.state.toolMetaById.set(toolCallId, summary);
+    }
+    await ctx.emitToolSummary(toolName, nextMeta);
   }
 
   // Track messaging tool sends (pending until confirmed in tool_execution_end).
@@ -370,10 +398,14 @@ export async function handleToolExecutionEnd(
     `embedded run tool end: runId=${ctx.params.runId} tool=${toolName} toolCallId=${toolCallId}`,
   );
 
+  if (ctx.params.onToolResult && ctx.shouldEmitToolResult()) {
+    await ctx.emitToolDone(toolName, meta, isToolError ? "error" : "done");
+  }
+
   if (ctx.params.onToolResult && ctx.shouldEmitToolOutput()) {
     const outputText = extractToolResultText(sanitizedResult);
     if (outputText) {
-      ctx.emitToolOutput(toolName, meta, outputText);
+      await ctx.emitToolOutput(toolName, meta, outputText);
     }
   }
 
@@ -384,7 +416,9 @@ export async function handleToolExecutionEnd(
     const mediaPaths = extractToolResultMediaPaths(result);
     if (mediaPaths.length > 0) {
       try {
-        void ctx.params.onToolResult({ mediaUrls: mediaPaths });
+        if (!ctx.isSubscriptionClosed()) {
+          await ctx.params.onToolResult({ mediaUrls: mediaPaths });
+        }
       } catch {
         // ignore delivery failures
       }

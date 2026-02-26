@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { repairCodexMonitorsForSession } from "../../agents/codex-handoff/scheduler.js";
 import { lookupContextTokens } from "../../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
 import { resolveModelAuthMode } from "../../agents/model-auth.js";
@@ -146,6 +147,12 @@ export async function runReplyAgent(params: {
     shouldInjectGroupIntro,
     typingMode,
   } = params;
+
+  if (sessionKey) {
+    void repairCodexMonitorsForSession(sessionKey, followupRun.run.config).catch(() => {
+      // best-effort self-healing guardrail
+    });
+  }
 
   let activeSessionEntry = sessionEntry;
   const activeSessionStore = sessionStore;

@@ -82,6 +82,8 @@ export function buildEmbeddedRunPayloads(params: {
   verboseLevel?: VerboseLevel;
   reasoningLevel?: ReasoningLevel;
   toolResultFormat?: ToolResultFormat;
+  toolResultMonospaceFence?: boolean;
+  toolResultIncludeEmoji?: boolean;
   suppressToolErrorWarnings?: boolean;
   inlineToolResultsAllowed: boolean;
 }): Array<{
@@ -142,6 +144,8 @@ export function buildEmbeddedRunPayloads(params: {
     for (const { toolName, meta } of params.toolMetas) {
       const agg = formatToolAggregate(toolName, meta ? [meta] : [], {
         markdown: useMarkdown,
+        monospaceFence: params.toolResultMonospaceFence,
+        includeEmoji: params.toolResultIncludeEmoji,
       });
       const {
         text: cleanedText,
@@ -270,7 +274,11 @@ export function buildEmbeddedRunPayloads(params: {
       const toolSummary = formatToolAggregate(
         params.lastToolError.toolName,
         params.lastToolError.meta ? [params.lastToolError.meta] : undefined,
-        { markdown: useMarkdown },
+        {
+          markdown: useMarkdown,
+          monospaceFence: params.toolResultMonospaceFence,
+          includeEmoji: params.toolResultIncludeEmoji,
+        },
       );
       const errorSuffix = params.lastToolError.error ? `: ${params.lastToolError.error}` : "";
       const warningText = `⚠️ ${toolSummary} failed${errorSuffix}`;

@@ -158,6 +158,25 @@ export type AgentDefaultsConfig = {
   contextTokens?: number;
   /** Optional CLI backends for text-only fallback (claude-cli, etc.). */
   cliBackends?: Record<string, CliBackendConfig>;
+  /** Self-improvement orchestration settings. */
+  selfImprovement?: {
+    handoff?: {
+      /** Enable watchdog orchestration for Codex handoff tasks. */
+      monitorEnabled?: boolean;
+      /** Recurring watchdog cadence in seconds. */
+      monitorIntervalSeconds?: number;
+      /** Maximum watchdog attempts before terminal failure. */
+      monitorMaxAttempts?: number;
+      /** Staleness timeout in seconds without progress heartbeat/event. */
+      staleTimeoutSeconds?: number;
+      /** Require explicit push status acknowledgements from Codex. */
+      requirePushAck?: boolean;
+      /** Automatically reschedule while task remains in-flight. */
+      autoRescheduleOnInFlight?: boolean;
+      /** Retry backoff schedule in seconds for stale/error recovery. */
+      retryBackoffSeconds?: number[];
+    };
+  };
   /** Opt-in: prune old tool results from the LLM context to reduce token usage. */
   contextPruning?: AgentContextPruningConfig;
   /** Compaction tuning and pre-compaction memory flush behavior. */

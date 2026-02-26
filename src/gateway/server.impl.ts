@@ -8,6 +8,7 @@ import type { CanvasHostServer } from "../canvas-host/server.js";
 import { type ChannelId, listChannelPlugins } from "../channels/plugins/index.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import { createDefaultDeps } from "../cli/deps.js";
+import { agentCommand } from "../commands/agent.js";
 import { isRestartEnabled } from "../config/commands.js";
 import {
   CONFIG_PATH,
@@ -44,10 +45,12 @@ import { getGlobalHookRunner, runGlobalGatewayStopSafely } from "../plugins/hook
 import { createEmptyPluginRegistry } from "../plugins/registry.js";
 import type { PluginServicesHandle } from "../plugins/services.js";
 import { getTotalQueueSize } from "../process/command-queue.js";
-import type { RuntimeEnv } from "../runtime.js";
+import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
+import { INTERNAL_MESSAGE_CHANNEL } from "../utils/message-channel.js";
 import { runOnboardingWizard } from "../wizard/onboarding.js";
 import { createAuthRateLimiter, type AuthRateLimiter } from "./auth-rate-limit.js";
 import { startChannelHealthMonitor } from "./channel-health-monitor.js";
+import { recoverInterruptedGatewayChatRuns } from "./chat-run-recovery.js";
 import { startGatewayConfigReloader } from "./config-reload.js";
 import type { ControlUiRootState } from "./control-ui.js";
 import {
@@ -553,6 +556,28 @@ export async function startGatewayServer(
         cfg: cfgAtStart,
       });
     })().catch((err) => log.error(`Delivery recovery failed: ${String(err)}`));
+  }
+  if (!minimalTestGateway) {
+    void recoverInterruptedGatewayChatRuns({
+      log: log.child("chat-run-recovery"),
+      resume: async (entry) => {
+        await agentCommand(
+          {
+            sessionKey: entry.sessionKey,
+            runId: entry.runId,
+            message:
+              "Continue where you left off before the gateway reconnect. " +
+              "Do not restart finished work and avoid repeating text already sent.",
+            deliver: false,
+            channel: INTERNAL_MESSAGE_CHANNEL,
+            messageChannel: INTERNAL_MESSAGE_CHANNEL,
+          },
+          defaultRuntime,
+          deps,
+        );
+        return true;
+      },
+    }).catch((err) => log.error(`Chat run recovery failed: ${String(err)}`));
   }
 
   const execApprovalManager = new ExecApprovalManager();

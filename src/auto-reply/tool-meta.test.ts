@@ -45,17 +45,44 @@ describe("tool meta formatting", () => {
     expect(out).toContain("`~/dir/a.txt`");
   });
 
+  it("wraps full aggregate in inline backticks when monospace fence is enabled", () => {
+    vi.stubEnv("HOME", home);
+    const out = formatToolAggregate("exec", ["Running command"], { monospaceFence: true });
+    expect(out).toBe("`💻 Running command`");
+  });
+
+  it("can render aggregate without emoji", () => {
+    vi.stubEnv("HOME", home);
+    const out = formatToolAggregate("exec", ["Running command"], { includeEmoji: false });
+    expect(out).toBe("Running command");
+  });
+
   it("keeps exec flags outside markdown and moves them to the front", () => {
     vi.stubEnv("HOME", home);
     const out = formatToolAggregate("exec", [`cd ${home}/dir && gemini 2>&1 · elevated`], {
       markdown: true,
     });
-    expect(out).toBe("🛠️ Exec: elevated · `cd ~/dir && gemini 2>&1`");
+    expect(out).toBe("💻 elevated · `cd ~/dir && gemini 2>&1`");
   });
 
   it("formats prefixes with default labels", () => {
     vi.stubEnv("HOME", home);
     expect(formatToolPrefix(undefined, undefined)).toBe("🧩 Tool");
     expect(formatToolPrefix("x", `${home}/a.txt`)).toBe("🧩 X: ~/a.txt");
+    expect(formatToolPrefix("image", "Screenshot van ChatGPT Atlas")).toBe(
+      "📸 Screenshot van ChatGPT Atlas",
+    );
+    expect(formatToolPrefix("exec", "Running a command in terminal.")).toBe(
+      "💻 Running a command in terminal.",
+    );
+    expect(formatToolPrefix("process", "Checking process keen-shell for new output.")).toBe(
+      "🧰 Checking process keen-shell for new output.",
+    );
+    expect(formatToolPrefix("cron", 'Scheduling cron job "resume-notion" every 2m.')).toBe(
+      '⏰ Scheduling cron job "resume-notion" every 2m.',
+    );
+    expect(
+      formatToolPrefix("exec", "Running a command in terminal.", { includeEmoji: false }),
+    ).toBe("Running a command in terminal.");
   });
 });

@@ -4,6 +4,7 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { HookRunner } from "../plugins/hooks.js";
 import type { BlockReplyChunking } from "./pi-embedded-block-chunker.js";
 import type { BlockReplyPayload } from "./pi-embedded-payloads.js";
+import type { ToolBarBulletStyle } from "./tool-bullets.js";
 
 export type ToolResultFormat = "markdown" | "plain";
 
@@ -14,6 +15,11 @@ export type SubscribeEmbeddedPiSessionParams = {
   verboseLevel?: VerboseLevel;
   reasoningMode?: ReasoningLevel;
   toolResultFormat?: ToolResultFormat;
+  toolResultMonospaceFence?: boolean;
+  toolResultIncludeEmoji?: boolean;
+  toolResultBulletStyle?: ToolBarBulletStyle;
+  /** Emit a second tool summary on completion (done/error). */
+  toolResultEmitDone?: boolean;
   shouldEmitToolResult?: () => boolean;
   shouldEmitToolOutput?: () => boolean;
   onToolResult?: (payload: { text?: string; mediaUrls?: string[] }) => void | Promise<void>;

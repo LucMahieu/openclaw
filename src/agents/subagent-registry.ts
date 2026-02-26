@@ -3,6 +3,8 @@ import { callGateway } from "../gateway/call.js";
 import { onAgentEvent } from "../infra/agent-events.js";
 import { defaultRuntime } from "../runtime.js";
 import { type DeliveryContext, normalizeDeliveryContext } from "../utils/delivery-context.js";
+import { removeCodexMonitorCron } from "./codex-handoff/scheduler.js";
+import { markCodexHandoffPhase } from "./codex-handoff/tracker.js";
 import { resetAnnounceQueuesForTests } from "./subagent-announce-queue.js";
 import { runSubagentAnnounceFlow, type SubagentRunOutcome } from "./subagent-announce.js";
 import {
@@ -300,10 +302,32 @@ function ensureListener() {
     if (phase === "error") {
       const error = typeof evt.data?.error === "string" ? evt.data.error : undefined;
       entry.outcome = { status: "error", error };
+      markCodexHandoffPhase({
+        taskId: evt.runId,
+        phase: "failed",
+        summary: error,
+        atMs: endedAt,
+      });
+      void removeCodexMonitorCron(evt.runId).catch(() => {
+        // best-effort cleanup
+      });
     } else if (evt.data?.aborted) {
       entry.outcome = { status: "timeout" };
+      markCodexHandoffPhase({
+        taskId: evt.runId,
+        phase: "failed",
+        summary: "timed out",
+        atMs: endedAt,
+      });
+      void removeCodexMonitorCron(evt.runId).catch(() => {
+        // best-effort cleanup
+      });
     } else {
       entry.outcome = { status: "ok" };
+      markCodexHandoffPhase({ taskId: evt.runId, phase: "done", atMs: endedAt });
+      void removeCodexMonitorCron(evt.runId).catch(() => {
+        // best-effort cleanup
+      });
     }
     persistSubagentRuns();
 
@@ -761,6 +785,14 @@ export function listSubagentRunsForRequester(requesterSessionKey: string): Subag
     return [];
   }
   return [...subagentRuns.values()].filter((entry) => entry.requesterSessionKey === key);
+}
+
+export function getSubagentRunRecord(runId: string): SubagentRunRecord | undefined {
+  const key = runId.trim();
+  if (!key) {
+    return undefined;
+  }
+  return subagentRuns.get(key);
 }
 
 export function countActiveRunsForSession(requesterSessionKey: string): number {
