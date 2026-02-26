@@ -14,6 +14,49 @@ import {
 type ModelsConfig = NonNullable<OpenClawConfig["models"]>;
 
 const DEFAULT_MODE: NonNullable<ModelsConfig["mode"]> = "merge";
+const OPENROUTER_PROVIDER_KEY = "openrouter";
+const OPENROUTER_GEMINI_3_PRO_PREVIEW_MODEL_ID = "google/gemini-3-pro-preview";
+const OPENROUTER_GEMINI_31_PRO_PREVIEW_CUSTOMTOOLS_MODEL_ID =
+  "google/gemini-3.1-pro-preview-customtools";
+
+function ensureOpenRouterGemini31CustomToolsModel(
+  providers: Record<string, ProviderConfig>,
+): Record<string, ProviderConfig> {
+  const openrouter = providers[OPENROUTER_PROVIDER_KEY];
+  if (!openrouter || !Array.isArray(openrouter.models) || openrouter.models.length === 0) {
+    return providers;
+  }
+
+  const hasCustomTools = openrouter.models.some(
+    (model) =>
+      model?.id?.trim().toLowerCase() === OPENROUTER_GEMINI_31_PRO_PREVIEW_CUSTOMTOOLS_MODEL_ID,
+  );
+  if (hasCustomTools) {
+    return providers;
+  }
+
+  const baseModel = openrouter.models.find(
+    (model) => model?.id?.trim().toLowerCase() === OPENROUTER_GEMINI_3_PRO_PREVIEW_MODEL_ID,
+  );
+  if (!baseModel) {
+    return providers;
+  }
+
+  return {
+    ...providers,
+    [OPENROUTER_PROVIDER_KEY]: {
+      ...openrouter,
+      models: [
+        ...openrouter.models,
+        {
+          ...baseModel,
+          id: OPENROUTER_GEMINI_31_PRO_PREVIEW_CUSTOMTOOLS_MODEL_ID,
+          name: OPENROUTER_GEMINI_31_PRO_PREVIEW_CUSTOMTOOLS_MODEL_ID,
+        },
+      ],
+    },
+  };
+}
 
 function mergeProviderModels(implicit: ProviderConfig, explicit: ProviderConfig): ProviderConfig {
   const implicitModels = Array.isArray(implicit.models) ? implicit.models : [];
@@ -123,8 +166,9 @@ export async function ensureOpenClawModelsJson(
     }
   }
 
+  const augmentedProviders = ensureOpenRouterGemini31CustomToolsModel(mergedProviders);
   const normalizedProviders = normalizeProviders({
-    providers: mergedProviders,
+    providers: augmentedProviders,
     agentDir,
   });
   const next = `${JSON.stringify({ providers: normalizedProviders }, null, 2)}\n`;
