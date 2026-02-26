@@ -9,6 +9,7 @@ import type {
   ToolCallSummary,
   ToolHandlerContext,
 } from "./pi-embedded-subscribe.handlers.types.js";
+import * as summaryModule from "./toolcall-summary.js";
 
 type ToolExecutionStartEvent = Extract<AgentEvent, { type: "tool_execution_start" }>;
 type ToolExecutionEndEvent = Extract<AgentEvent, { type: "tool_execution_end" }>;
@@ -177,6 +178,52 @@ describe("tool summary ordering", () => {
     await Promise.all([startPromise, endPromise]);
     const lastDoneCall = ctx.emitToolDone.mock.calls.at(-1) ?? [];
     expect(lastDoneCall[0]).toBe("exec");
+    expect(lastDoneCall[2]).toBe("done");
+    expect(lastDoneCall[3]).toBe(toolCallId);
+  });
+
+  it("emits done with resolved summary meta (not stale pre-summary meta)", async () => {
+    const { ctx } = createTestContext();
+    ctx.params.onToolResult = vi.fn();
+    ctx.shouldEmitToolResult = () => true;
+    ctx.emitToolDone = vi.fn(async () => {});
+
+    let resolveSummary: ((value: string) => void) | undefined;
+    const summaryPromise = new Promise<string>((resolve) => {
+      resolveSummary = resolve;
+    });
+    vi.spyOn(summaryModule, "summarizeToolCallForUser").mockImplementation(() => summaryPromise);
+
+    const toolCallId = "tool-order-2";
+    const startPromise = handleToolExecutionStart(
+      ctx as never,
+      {
+        type: "tool_execution_start",
+        toolName: "exec",
+        toolCallId,
+        args: { command: "uptime" },
+      } as never,
+    );
+
+    const endPromise = handleToolExecutionEnd(
+      ctx as never,
+      {
+        type: "tool_execution_end",
+        toolName: "exec",
+        toolCallId,
+        isError: false,
+        result: { ok: true },
+      } as never,
+    );
+
+    await Promise.resolve();
+    expect(ctx.emitToolDone).not.toHaveBeenCalled();
+
+    resolveSummary?.("Gecontroleerd: systeemstatus en uptime");
+    await Promise.all([startPromise, endPromise]);
+
+    const lastDoneCall = ctx.emitToolDone.mock.calls.at(-1) ?? [];
+    expect(lastDoneCall[1]).toBe("Gecontroleerd: systeemstatus en uptime");
     expect(lastDoneCall[2]).toBe("done");
     expect(lastDoneCall[3]).toBe(toolCallId);
   });

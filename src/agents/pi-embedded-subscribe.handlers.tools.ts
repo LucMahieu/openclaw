@@ -300,8 +300,24 @@ export async function handleToolExecutionEnd(
   const sanitizedResult = sanitizeToolResult(result);
   const startData = toolStartData.get(toolCallId);
   toolStartData.delete(toolCallId);
+
+  // Start/done must stay ordered and share the same resolved summary text.
+  // Wait before reading meta so done/edit cannot use stale pre-summary values.
+  const pendingStartSummary = ctx.state.pendingToolStartSummaryById.get(toolCallId);
+  if (pendingStartSummary) {
+    await pendingStartSummary.catch(() => undefined);
+  }
+
   const callSummary = ctx.state.toolMetaById.get(toolCallId);
-  const meta = callSummary?.meta;
+  const meta = normalizeSummaryMeta(callSummary?.meta);
+  if (callSummary && meta !== callSummary.meta) {
+    callSummary.meta = meta;
+    ctx.state.toolMetaById.set(toolCallId, callSummary);
+    ctx.log.debug(
+      `tool meta normalized at end: runId=${ctx.params.runId} tool=${toolName} toolCallId=${toolCallId}`,
+    );
+  }
+
   ctx.state.toolMetas.push({ toolName, meta });
   ctx.state.toolMetaById.delete(toolCallId);
   ctx.state.toolSummaryById.delete(toolCallId);
@@ -401,12 +417,6 @@ export async function handleToolExecutionEnd(
   ctx.log.debug(
     `embedded run tool end: runId=${ctx.params.runId} tool=${toolName} toolCallId=${toolCallId}`,
   );
-
-  // Start/done must stay ordered per tool call; wait if the start summary is still in-flight.
-  const pendingStartSummary = ctx.state.pendingToolStartSummaryById.get(toolCallId);
-  if (pendingStartSummary) {
-    await pendingStartSummary.catch(() => undefined);
-  }
 
   if (ctx.params.onToolResult && ctx.shouldEmitToolResult()) {
     await ctx.emitToolDone(toolName, meta, isToolError ? "error" : "done", toolCallId);
