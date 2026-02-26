@@ -91,9 +91,19 @@ export type EmbeddedPiSubscribeContext = {
 
   shouldEmitToolResult: () => boolean;
   shouldEmitToolOutput: () => boolean;
-  emitToolSummary: (toolName?: string, meta?: string) => Promise<void>;
-  emitToolDone: (toolName?: string, meta?: string, status?: "done" | "error") => Promise<void>;
-  emitToolOutput: (toolName?: string, meta?: string, output?: string) => Promise<void>;
+  emitToolSummary: (toolName?: string, meta?: string, toolCallId?: string) => Promise<void>;
+  emitToolDone: (
+    toolName?: string,
+    meta?: string,
+    status?: "done" | "error",
+    toolCallId?: string,
+  ) => Promise<void>;
+  emitToolOutput: (
+    toolName?: string,
+    meta?: string,
+    output?: string,
+    toolCallId?: string,
+  ) => Promise<void>;
   stripBlockTags: (
     text: string,
     state: { thinking: boolean; final: boolean; inlineCode?: InlineCodeState },
@@ -165,9 +175,19 @@ export type ToolHandlerContext = {
   flushBlockReplyBuffer: () => void;
   shouldEmitToolResult: () => boolean;
   shouldEmitToolOutput: () => boolean;
-  emitToolSummary: (toolName?: string, meta?: string) => Promise<void>;
-  emitToolDone: (toolName?: string, meta?: string, status?: "done" | "error") => Promise<void>;
-  emitToolOutput: (toolName?: string, meta?: string, output?: string) => Promise<void>;
+  emitToolSummary: (toolName?: string, meta?: string, toolCallId?: string) => Promise<void>;
+  emitToolDone: (
+    toolName?: string,
+    meta?: string,
+    status?: "done" | "error",
+    toolCallId?: string,
+  ) => Promise<void>;
+  emitToolOutput: (
+    toolName?: string,
+    meta?: string,
+    output?: string,
+    toolCallId?: string,
+  ) => Promise<void>;
   trimMessagingToolSent: () => void;
   isSubscriptionClosed: () => boolean;
 };

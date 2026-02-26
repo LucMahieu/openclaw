@@ -1,4 +1,5 @@
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
+import { getToolResultContext } from "../../agents/tool-result-context.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { loadSessionStore, resolveStorePath } from "../../config/sessions.js";
 import { logVerbose } from "../../globals.js";
@@ -351,7 +352,18 @@ export async function dispatchReplyFromConfig(params: {
               inboundAudio,
               ttsAuto: sessionTtsAuto,
             });
-            const deliveryPayload = resolveToolDeliveryPayload(ttsPayload);
+            const toolCallId = getToolResultContext()?.toolCallId;
+            const payloadWithToolContext =
+              toolCallId && currentSurface === "whatsapp"
+                ? {
+                    ...ttsPayload,
+                    channelData: {
+                      ...ttsPayload.channelData,
+                      whatsappToolCallId: toolCallId,
+                    },
+                  }
+                : ttsPayload;
+            const deliveryPayload = resolveToolDeliveryPayload(payloadWithToolContext);
             if (!deliveryPayload) {
               return;
             }

@@ -25,6 +25,7 @@ export type ActiveWebListener = {
     participant?: string,
   ) => Promise<void>;
   sendComposingTo: (to: string) => Promise<void>;
+  editMessage: (to: string, messageId: string, newText: string) => Promise<void>;
   close?: () => Promise<void>;
 };
 

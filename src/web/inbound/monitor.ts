@@ -22,6 +22,17 @@ import { downloadInboundMedia } from "./media.js";
 import { createWebSendApi } from "./send-api.js";
 import type { WebInboundMessage, WebListenerCloseReason } from "./types.js";
 
+function resolveOutboundMessageId(result: unknown): string | null {
+  if (typeof result !== "object" || !result || !("key" in result)) {
+    return null;
+  }
+  const id = (result as { key?: { id?: string } }).key?.id;
+  if (typeof id !== "string" || !id.trim()) {
+    return null;
+  }
+  return id;
+}
+
 export async function monitorWebInbox(options: {
   verbose: boolean;
   accountId: string;
@@ -67,6 +78,13 @@ export async function monitorWebInbox(options: {
 
   const selfJid = sock.user?.id;
   const selfE164 = selfJid ? jidToE164(selfJid) : null;
+  const sendApi = createWebSendApi({
+    sock: {
+      sendMessage: (jid: string, content: AnyMessageContent) => sock.sendMessage(jid, content),
+      sendPresenceUpdate: (presence, jid?: string) => sock.sendPresenceUpdate(presence, jid),
+    },
+    defaultAccountId: options.accountId,
+  });
   const debouncer = createInboundDebouncer<WebInboundMessage>({
     debounceMs: options.debounceMs ?? 0,
     buildKey: (msg) => {
@@ -286,10 +304,18 @@ export async function monitorWebInbox(options: {
         }
       };
       const reply = async (text: string) => {
-        await sock.sendMessage(chatJid, { text });
+        const sent = await sendApi.sendMessage(chatJid, text, undefined, undefined, {
+          accountId: access.resolvedAccountId,
+        });
+        return sent ?? null;
+      };
+      const editMessage = async (messageId: string, text: string) => {
+        await sendApi.editMessage(chatJid, messageId, text);
       };
       const sendMedia = async (payload: AnyMessageContent) => {
-        await sock.sendMessage(chatJid, payload);
+        const result = await sock.sendMessage(chatJid, payload);
+        const messageId = resolveOutboundMessageId(result);
+        return messageId ? { messageId } : null;
       };
       const timestamp = messageTimestampMs;
       const mentionedJids = extractMentionedJids(msg.message as proto.IMessage | undefined);
@@ -326,6 +352,7 @@ export async function monitorWebInbox(options: {
         location: location ?? undefined,
         sendComposing,
         reply,
+        editMessage,
         sendMedia,
         mediaPath,
         mediaType,
@@ -363,14 +390,6 @@ export async function monitorWebInbox(options: {
     }
   };
   sock.ev.on("connection.update", handleConnectionUpdate);
-
-  const sendApi = createWebSendApi({
-    sock: {
-      sendMessage: (jid: string, content: AnyMessageContent) => sock.sendMessage(jid, content),
-      sendPresenceUpdate: (presence, jid?: string) => sock.sendPresenceUpdate(presence, jid),
-    },
-    defaultAccountId: options.accountId,
-  });
 
   return {
     close: async () => {

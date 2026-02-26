@@ -220,7 +220,7 @@ export async function handleToolExecutionStart(
       summary.meta = nextMeta;
       ctx.state.toolMetaById.set(toolCallId, summary);
     }
-    await ctx.emitToolSummary(toolName, nextMeta);
+    await ctx.emitToolSummary(toolName, nextMeta, toolCallId);
   }
 
   // Track messaging tool sends (pending until confirmed in tool_execution_end).
@@ -399,13 +399,13 @@ export async function handleToolExecutionEnd(
   );
 
   if (ctx.params.onToolResult && ctx.shouldEmitToolResult()) {
-    await ctx.emitToolDone(toolName, meta, isToolError ? "error" : "done");
+    await ctx.emitToolDone(toolName, meta, isToolError ? "error" : "done", toolCallId);
   }
 
   if (ctx.params.onToolResult && ctx.shouldEmitToolOutput()) {
     const outputText = extractToolResultText(sanitizedResult);
     if (outputText) {
-      await ctx.emitToolOutput(toolName, meta, outputText);
+      await ctx.emitToolOutput(toolName, meta, outputText, toolCallId);
     }
   }
 

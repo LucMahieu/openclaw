@@ -12,6 +12,13 @@ import { whatsappOutboundLog } from "./loggers.js";
 import type { WebInboundMsg } from "./types.js";
 import { elide } from "./util.js";
 
+function pickMessageId(result: { messageId: string } | null | void): string | null {
+  if (!result || typeof result.messageId !== "string" || !result.messageId.trim()) {
+    return null;
+  }
+  return result.messageId;
+}
+
 export async function deliverWebReply(params: {
   replyResult: ReplyPayload;
   msg: WebInboundMsg;
@@ -26,7 +33,7 @@ export async function deliverWebReply(params: {
   connectionId?: string;
   skipLog?: boolean;
   tableMode?: MarkdownTableMode;
-}) {
+}): Promise<{ messageId: string } | null> {
   const { replyResult, msg, maxMediaBytes, textLimit, replyLogger, connectionId, skipLog } = params;
   const replyStarted = Date.now();
   const tableMode = params.tableMode ?? "code";
@@ -66,10 +73,14 @@ export async function deliverWebReply(params: {
 
   // Text-only replies
   if (mediaList.length === 0 && textChunks.length) {
+    let firstMessageId: string | null = null;
     const totalChunks = textChunks.length;
     for (const [index, chunk] of textChunks.entries()) {
       const chunkStarted = Date.now();
-      await sendWithRetry(() => msg.reply(chunk), "text");
+      const sendResult = await sendWithRetry(() => msg.reply(chunk), "text");
+      if (!firstMessageId) {
+        firstMessageId = pickMessageId(sendResult as { messageId: string } | null | void);
+      }
       if (!skipLog) {
         const durationMs = Date.now() - chunkStarted;
         whatsappOutboundLog.debug(
@@ -91,10 +102,11 @@ export async function deliverWebReply(params: {
       },
       "auto-reply sent (text)",
     );
-    return;
+    return firstMessageId ? { messageId: firstMessageId } : null;
   }
 
   const remainingText = [...textChunks];
+  let firstMessageId: string | null = null;
 
   // Media (with optional caption on first item)
   for (const [index, mediaUrl] of mediaList.entries()) {
@@ -111,7 +123,7 @@ export async function deliverWebReply(params: {
         logVerbose(`Web auto-reply media source: ${mediaUrl} (kind ${media.kind})`);
       }
       if (media.kind === "image") {
-        await sendWithRetry(
+        const sendResult = await sendWithRetry(
           () =>
             msg.sendMedia({
               image: media.buffer,
@@ -120,8 +132,11 @@ export async function deliverWebReply(params: {
             }),
           "media:image",
         );
+        if (!firstMessageId) {
+          firstMessageId = pickMessageId(sendResult as { messageId: string } | null | void);
+        }
       } else if (media.kind === "audio") {
-        await sendWithRetry(
+        const sendResult = await sendWithRetry(
           () =>
             msg.sendMedia({
               audio: media.buffer,
@@ -131,8 +146,11 @@ export async function deliverWebReply(params: {
             }),
           "media:audio",
         );
+        if (!firstMessageId) {
+          firstMessageId = pickMessageId(sendResult as { messageId: string } | null | void);
+        }
       } else if (media.kind === "video") {
-        await sendWithRetry(
+        const sendResult = await sendWithRetry(
           () =>
             msg.sendMedia({
               video: media.buffer,
@@ -141,10 +159,13 @@ export async function deliverWebReply(params: {
             }),
           "media:video",
         );
+        if (!firstMessageId) {
+          firstMessageId = pickMessageId(sendResult as { messageId: string } | null | void);
+        }
       } else {
         const fileName = media.fileName ?? mediaUrl.split("/").pop() ?? "file";
         const mimetype = media.contentType ?? "application/octet-stream";
-        await sendWithRetry(
+        const sendResult = await sendWithRetry(
           () =>
             msg.sendMedia({
               document: media.buffer,
@@ -154,6 +175,9 @@ export async function deliverWebReply(params: {
             }),
           "media:document",
         );
+        if (!firstMessageId) {
+          firstMessageId = pickMessageId(sendResult as { messageId: string } | null | void);
+        }
       }
       whatsappOutboundLog.info(
         `Sent media reply to ${msg.from} (${(media.buffer.length / (1024 * 1024)).toFixed(2)}MB)`,
@@ -182,7 +206,10 @@ export async function deliverWebReply(params: {
         const fallbackText = fallbackTextParts.join("\n");
         if (fallbackText) {
           whatsappOutboundLog.warn(`Media skipped; sent text-only to ${msg.from}`);
-          await msg.reply(fallbackText);
+          const fallbackResult = await msg.reply(fallbackText);
+          if (!firstMessageId) {
+            firstMessageId = pickMessageId(fallbackResult);
+          }
         }
       }
     }
@@ -190,6 +217,10 @@ export async function deliverWebReply(params: {
 
   // Remaining text chunks after media
   for (const chunk of remainingText) {
-    await msg.reply(chunk);
+    const sendResult = await msg.reply(chunk);
+    if (!firstMessageId) {
+      firstMessageId = pickMessageId(sendResult);
+    }
   }
+  return firstMessageId ? { messageId: firstMessageId } : null;
 }

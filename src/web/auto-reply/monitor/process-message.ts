@@ -33,6 +33,7 @@ import { newConnectionId } from "../../reconnect.js";
 import { formatError } from "../../session.js";
 import { deliverWebReply } from "../deliver-reply.js";
 import { whatsappInboundLog, whatsappOutboundLog } from "../loggers.js";
+import { clearToolEditState, getToolEditState, setToolEditState } from "../tool-edit-state.js";
 import type { WebInboundMsg } from "../types.js";
 import { elide } from "../util.js";
 import { maybeSendAckReaction } from "./ack-reaction.js";
@@ -47,6 +48,31 @@ export type GroupHistoryEntry = {
   id?: string;
   senderJid?: string;
 };
+
+function readWhatsAppToolCallId(payload: ReplyPayload): string | undefined {
+  const raw = payload.channelData?.whatsappToolCallId;
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+  const value = raw.trim();
+  return value.length > 0 ? value : undefined;
+}
+
+function stripInlineFences(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.replace(/^`+/, "").replace(/`+$/, "").trimStart();
+}
+
+function classifyToolBullet(text: string): "start" | "done" | "other" {
+  const normalized = stripInlineFences(text);
+  if (normalized.startsWith("○ ") || normalized.startsWith("□ ")) {
+    return "start";
+  }
+  if (normalized.startsWith("● ") || normalized.startsWith("✓ ") || normalized.startsWith("✗ ")) {
+    return "done";
+  }
+  return "other";
+}
 
 function normalizeAllowFromE164(values: Array<string | number> | undefined): string[] {
   const list = Array.isArray(values) ? values : [];
@@ -376,7 +402,29 @@ export async function processMessage(params: {
             }
           },
           deliver: async (payload: ReplyPayload, info) => {
-            await deliverWebReply({
+            const toolCallId = info.kind === "tool" ? readWhatsAppToolCallId(payload) : undefined;
+            const bulletKind =
+              info.kind === "tool" && payload.text ? classifyToolBullet(payload.text) : "other";
+            const isToolStart = bulletKind === "start";
+            const isToolDone = bulletKind === "done";
+            if (isToolDone && toolCallId && payload.text && params.msg.editMessage) {
+              const existing = getToolEditState(toolCallId);
+              if (existing) {
+                try {
+                  await params.msg.editMessage(existing.messageId, payload.text);
+                  clearToolEditState(toolCallId);
+                  didSendReply = true;
+                  params.rememberSentText(payload.text, {});
+                  return;
+                } catch (err) {
+                  clearToolEditState(toolCallId);
+                  logVerbose(
+                    `WhatsApp tool summary edit failed for ${toolCallId}: ${formatError(err)}`,
+                  );
+                }
+              }
+            }
+            const delivered = await deliverWebReply({
               replyResult: payload,
               msg: params.msg,
               mediaLocalRoots,
@@ -391,6 +439,16 @@ export async function processMessage(params: {
             });
             didSendReply = true;
             if (info.kind === "tool") {
+              if (isToolStart && toolCallId && delivered?.messageId) {
+                setToolEditState(toolCallId, {
+                  jid: params.msg.chatId ?? params.msg.from,
+                  messageId: delivered.messageId,
+                  text: payload.text ?? "",
+                });
+              }
+              if (isToolDone && toolCallId) {
+                clearToolEditState(toolCallId);
+              }
               params.rememberSentText(payload.text, {});
               return;
             }

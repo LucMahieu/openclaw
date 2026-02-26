@@ -293,4 +293,120 @@ describe("web processMessage inbound contract", () => {
     expect(runRecoveryMock.markRunInFlight).toHaveBeenCalledTimes(1);
     expect(runRecoveryMock.clearRunInFlight).toHaveBeenCalledTimes(1);
   });
+
+  it("edits tool summary message instead of sending a second tool message", async () => {
+    const reply = vi.fn(async () => ({ messageId: "tool-start-msg" }));
+    const editMessage = vi.fn(async () => {});
+    const sendMedia = vi.fn(async () => undefined);
+    dispatcherMock.mockImplementationOnce(
+      async (params: {
+        dispatcherOptions?: {
+          deliver?: (
+            payload: { text?: string; channelData?: Record<string, unknown> },
+            info: { kind: "tool" | "block" | "final" },
+          ) => Promise<void>;
+        };
+      }) => {
+        await params.dispatcherOptions?.deliver?.(
+          {
+            text: "○ run tool",
+            channelData: { whatsappToolCallId: "tool-call-1" },
+          },
+          { kind: "tool" },
+        );
+        await params.dispatcherOptions?.deliver?.(
+          {
+            text: "● run tool\n```txt\nok\n```",
+            channelData: { whatsappToolCallId: "tool-call-1" },
+          },
+          { kind: "tool" },
+        );
+        return { queuedFinal: true };
+      },
+    );
+
+    const didSend = await processMessage(
+      makeProcessMessageArgs({
+        routeSessionKey: "agent:main:whatsapp:direct:+1111",
+        groupHistoryKey: "+1111",
+        msg: {
+          id: "tool-msg",
+          from: "+1111",
+          to: "+2222",
+          chatType: "direct",
+          body: "run",
+          chatId: "1111@s.whatsapp.net",
+          sendComposing: async () => {},
+          reply,
+          editMessage,
+          sendMedia,
+        },
+      }),
+    );
+
+    expect(didSend).toBe(true);
+    expect(reply).toHaveBeenCalledTimes(1);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    expect(editMessage).toHaveBeenCalledWith("tool-start-msg", "● run tool\n```txt\nok\n```");
+  });
+
+  it("falls back to sending a new tool message when edit fails", async () => {
+    const reply = vi
+      .fn(async () => ({ messageId: "tool-start-msg" }))
+      .mockResolvedValueOnce({ messageId: "tool-start-msg" })
+      .mockResolvedValueOnce({ messageId: "tool-fallback-msg" });
+    const editMessage = vi.fn(async () => {
+      throw new Error("edit failed");
+    });
+    const sendMedia = vi.fn(async () => undefined);
+    dispatcherMock.mockImplementationOnce(
+      async (params: {
+        dispatcherOptions?: {
+          deliver?: (
+            payload: { text?: string; channelData?: Record<string, unknown> },
+            info: { kind: "tool" | "block" | "final" },
+          ) => Promise<void>;
+        };
+      }) => {
+        await params.dispatcherOptions?.deliver?.(
+          {
+            text: "○ run tool",
+            channelData: { whatsappToolCallId: "tool-call-2" },
+          },
+          { kind: "tool" },
+        );
+        await params.dispatcherOptions?.deliver?.(
+          {
+            text: "● run tool\n```txt\ndone\n```",
+            channelData: { whatsappToolCallId: "tool-call-2" },
+          },
+          { kind: "tool" },
+        );
+        return { queuedFinal: true };
+      },
+    );
+
+    const didSend = await processMessage(
+      makeProcessMessageArgs({
+        routeSessionKey: "agent:main:whatsapp:direct:+1112",
+        groupHistoryKey: "+1112",
+        msg: {
+          id: "tool-msg-fallback",
+          from: "+1112",
+          to: "+2222",
+          chatType: "direct",
+          body: "run",
+          chatId: "1112@s.whatsapp.net",
+          sendComposing: async () => {},
+          reply,
+          editMessage,
+          sendMedia,
+        },
+      }),
+    );
+
+    expect(didSend).toBe(true);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    expect(reply).toHaveBeenCalledTimes(2);
+  });
 });

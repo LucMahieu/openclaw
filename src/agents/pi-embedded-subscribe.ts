@@ -19,6 +19,7 @@ import type {
 import type { SubscribeEmbeddedPiSessionParams } from "./pi-embedded-subscribe.types.js";
 import { formatReasoningMessage, stripDowngradedToolCallText } from "./pi-embedded-utils.js";
 import { TOOL_BULLETS } from "./tool-bullets.js";
+import { runWithToolResultContext } from "./tool-result-context.js";
 import { hasNonzeroUsage, normalizeUsage, type UsageLike } from "./usage.js";
 
 const THINKING_TAG_SCAN_RE = /<\s*(\/?)\s*(?:think(?:ing)?|thought|antthinking)\s*>/gi;
@@ -322,7 +323,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
   };
   const bulletStyle = params.toolResultBulletStyle;
   const shouldEmitToolDone = params.toolResultEmitDone === true;
-  const emitToolSummary = async (toolName?: string, meta?: string) => {
+  const emitToolSummary = async (toolName?: string, meta?: string, toolCallId?: string) => {
     if (!params.onToolResult || state.unsubscribed) {
       return;
     }
@@ -341,10 +342,17 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       return;
     }
     try {
-      await params.onToolResult({
-        text: cleanedText,
-        mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
-      });
+      const send = async () => {
+        await params.onToolResult?.({
+          text: cleanedText,
+          mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
+        });
+      };
+      if (toolCallId) {
+        await runWithToolResultContext({ toolCallId }, send);
+      } else {
+        await send();
+      }
       log.debug(
         `tool summary sent: runId=${params.runId} tool=${toolName ?? "unknown"} sentAt=${Date.now()}`,
       );
@@ -352,10 +360,12 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       // ignore tool result delivery failures
     }
   };
+
   const emitToolDone = async (
     toolName?: string,
     meta?: string,
     status: "done" | "error" = "done",
+    toolCallId?: string,
   ) => {
     if (!params.onToolResult || state.unsubscribed || !bulletStyle || !shouldEmitToolDone) {
       return;
@@ -376,15 +386,28 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       return;
     }
     try {
-      await params.onToolResult({
-        text: cleanedText,
-        mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
-      });
+      const send = async () => {
+        await params.onToolResult?.({
+          text: cleanedText,
+          mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
+        });
+      };
+      if (toolCallId) {
+        await runWithToolResultContext({ toolCallId }, send);
+      } else {
+        await send();
+      }
     } catch {
       // ignore tool result delivery failures
     }
   };
-  const emitToolOutput = async (toolName?: string, meta?: string, output?: string) => {
+
+  const emitToolOutput = async (
+    toolName?: string,
+    meta?: string,
+    output?: string,
+    toolCallId?: string,
+  ) => {
     if (!params.onToolResult || !output || state.unsubscribed) {
       return;
     }
@@ -402,10 +425,17 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       return;
     }
     try {
-      await params.onToolResult({
-        text: cleanedText,
-        mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
-      });
+      const send = async () => {
+        await params.onToolResult?.({
+          text: cleanedText,
+          mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
+        });
+      };
+      if (toolCallId) {
+        await runWithToolResultContext({ toolCallId }, send);
+      } else {
+        await send();
+      }
     } catch {
       // ignore tool result delivery failures
     }

@@ -109,5 +109,17 @@ export function createWebSendApi(params: {
       const jid = toWhatsappJid(to);
       await params.sock.sendPresenceUpdate("composing", jid);
     },
+    editMessage: async (to: string, messageId: string, newText: string): Promise<void> => {
+      const jid = toWhatsappJid(to);
+      await params.sock.sendMessage(jid, {
+        text: newText,
+        edit: {
+          remoteJid: jid,
+          id: messageId,
+          fromMe: true,
+        },
+      } as AnyMessageContent);
+      recordWhatsAppOutbound(params.defaultAccountId);
+    },
   } as const;
 }
