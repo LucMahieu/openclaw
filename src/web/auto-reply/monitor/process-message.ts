@@ -74,6 +74,13 @@ function classifyToolBullet(text: string): "start" | "done" | "other" {
   return "other";
 }
 
+function isValidEditMessageId(value: string | undefined): value is string {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed.toLowerCase() !== "unknown";
+}
 function normalizeAllowFromE164(values: Array<string | number> | undefined): string[] {
   const list = Array.isArray(values) ? values : [];
   return list
@@ -410,17 +417,21 @@ export async function processMessage(params: {
             if (isToolDone && toolCallId && payload.text && params.msg.editMessage) {
               const existing = getToolEditState(toolCallId);
               if (existing) {
-                try {
-                  await params.msg.editMessage(existing.messageId, payload.text);
+                if (!isValidEditMessageId(existing.messageId)) {
                   clearToolEditState(toolCallId);
-                  didSendReply = true;
-                  params.rememberSentText(payload.text, {});
-                  return;
-                } catch (err) {
-                  clearToolEditState(toolCallId);
-                  logVerbose(
-                    `WhatsApp tool summary edit failed for ${toolCallId}: ${formatError(err)}`,
-                  );
+                } else {
+                  try {
+                    await params.msg.editMessage(existing.messageId, payload.text);
+                    clearToolEditState(toolCallId);
+                    didSendReply = true;
+                    params.rememberSentText(payload.text, {});
+                    return;
+                  } catch (err) {
+                    clearToolEditState(toolCallId);
+                    logVerbose(
+                      `WhatsApp tool summary edit failed for ${toolCallId}: ${formatError(err)}`,
+                    );
+                  }
                 }
               }
             }
@@ -439,7 +450,7 @@ export async function processMessage(params: {
             });
             didSendReply = true;
             if (info.kind === "tool") {
-              if (isToolStart && toolCallId && delivered?.messageId) {
+              if (isToolStart && toolCallId && isValidEditMessageId(delivered?.messageId)) {
                 setToolEditState(toolCallId, {
                   jid: params.msg.chatId ?? params.msg.from,
                   messageId: delivered.messageId,

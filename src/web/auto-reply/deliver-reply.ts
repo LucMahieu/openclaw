@@ -16,7 +16,11 @@ function pickMessageId(result: { messageId: string } | null | void): string | nu
   if (!result || typeof result.messageId !== "string" || !result.messageId.trim()) {
     return null;
   }
-  return result.messageId;
+  const normalized = result.messageId.trim();
+  if (normalized.toLowerCase() === "unknown") {
+    return null;
+  }
+  return normalized;
 }
 
 export async function deliverWebReply(params: {
