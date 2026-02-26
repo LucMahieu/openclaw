@@ -68,6 +68,8 @@ export type OpenClawConfig = {
   ui?: {
     /** Accent color for OpenClaw UI chrome (hex). */
     seamColor?: string;
+    /** TUI tool bar bullet style: "circles" (○/●) or "checkboxes" (□/✓). Default: "checkboxes". */
+    toolBarBulletStyle?: "circles" | "checkboxes";
     assistant?: {
       /** Assistant display name for UI surfaces. */
       name?: string;

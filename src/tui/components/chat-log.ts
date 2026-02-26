@@ -1,13 +1,19 @@
 import { Container, Spacer, Text } from "@mariozechner/pi-tui";
 import { theme } from "../theme/theme.js";
 import { AssistantMessageComponent } from "./assistant-message.js";
-import { ToolExecutionComponent } from "./tool-execution.js";
+import { ToolExecutionComponent, type ToolBarBulletStyle } from "./tool-execution.js";
 import { UserMessageComponent } from "./user-message.js";
 
 export class ChatLog extends Container {
   private toolById = new Map<string, ToolExecutionComponent>();
   private streamingRuns = new Map<string, AssistantMessageComponent>();
   private toolsExpanded = false;
+  private bulletStyle: ToolBarBulletStyle;
+
+  constructor(bulletStyle: ToolBarBulletStyle = "checkboxes") {
+    super();
+    this.bulletStyle = bulletStyle;
+  }
 
   clearAll() {
     this.clear();
@@ -72,7 +78,7 @@ export class ChatLog extends Container {
       existing.setArgs(args);
       return existing;
     }
-    const component = new ToolExecutionComponent(toolName, args);
+    const component = new ToolExecutionComponent(toolName, args, this.bulletStyle);
     component.setExpanded(this.toolsExpanded);
     this.toolById.set(toolCallId, component);
     this.addChild(component);

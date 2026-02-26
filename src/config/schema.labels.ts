@@ -228,6 +228,7 @@ export const FIELD_LABELS: Record<string, string> = {
   "commands.useAccessGroups": "Use Access Groups",
   "commands.ownerAllowFrom": "Command Owners",
   "ui.seamColor": "Accent Color",
+  "ui.toolBarBulletStyle": "TUI Tool Bar Bullet Style (circles | checkboxes)",
   "ui.assistant.name": "Assistant Name",
   "ui.assistant.avatar": "Assistant Avatar",
   "browser.evaluateEnabled": "Browser Evaluate Enabled",

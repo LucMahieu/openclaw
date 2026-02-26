@@ -245,6 +245,7 @@ export const OpenClawSchema = z
     ui: z
       .object({
         seamColor: HexColorSchema.optional(),
+        toolBarBulletStyle: z.union([z.literal("circles"), z.literal("checkboxes")]).optional(),
         assistant: z
           .object({
             name: z.string().max(50).optional(),
