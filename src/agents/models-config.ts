@@ -18,6 +18,9 @@ const OPENROUTER_PROVIDER_KEY = "openrouter";
 const OPENROUTER_GEMINI_3_PRO_PREVIEW_MODEL_ID = "google/gemini-3-pro-preview";
 const OPENROUTER_GEMINI_31_PRO_PREVIEW_CUSTOMTOOLS_MODEL_ID =
   "google/gemini-3.1-pro-preview-customtools";
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const OPENROUTER_DEFAULT_CONTEXT_WINDOW = 1048576;
+const OPENROUTER_DEFAULT_MAX_TOKENS = 8192;
 
 function ensureOpenRouterGemini31CustomToolsModel(
   providers: Record<string, ProviderConfig>,
@@ -54,6 +57,56 @@ function ensureOpenRouterGemini31CustomToolsModel(
           name: OPENROUTER_GEMINI_31_PRO_PREVIEW_CUSTOMTOOLS_MODEL_ID,
         },
       ],
+    },
+  };
+}
+
+function ensureOpenRouterProviderFromAgentDefaults(params: {
+  providers: Record<string, ProviderConfig>;
+  cfg: OpenClawConfig;
+}): Record<string, ProviderConfig> {
+  const configuredModels = params.cfg.agents?.defaults?.models ?? {};
+  const openrouterModelIds = Object.keys(configuredModels)
+    .map((raw) => raw.trim())
+    .filter((raw) => raw.toLowerCase().startsWith(`${OPENROUTER_PROVIDER_KEY}/`))
+    .map((raw) => raw.slice(OPENROUTER_PROVIDER_KEY.length + 1))
+    .filter(Boolean);
+  if (openrouterModelIds.length === 0) {
+    return params.providers;
+  }
+
+  const existing = params.providers[OPENROUTER_PROVIDER_KEY];
+  const existingModels = Array.isArray(existing?.models) ? existing.models : [];
+  const existingIds = new Set(existingModels.map((model) => model.id.trim().toLowerCase()));
+
+  const toAdd = openrouterModelIds
+    .filter((id) => !existingIds.has(id.toLowerCase()))
+    .map((id) => ({
+      id,
+      name: id,
+      reasoning: false,
+      input: ["text"] as Array<"text" | "image">,
+      cost: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+      },
+      contextWindow: OPENROUTER_DEFAULT_CONTEXT_WINDOW,
+      maxTokens: OPENROUTER_DEFAULT_MAX_TOKENS,
+    }));
+
+  if (existing && toAdd.length === 0) {
+    return params.providers;
+  }
+
+  return {
+    ...params.providers,
+    [OPENROUTER_PROVIDER_KEY]: {
+      baseUrl: existing?.baseUrl ?? OPENROUTER_BASE_URL,
+      api: existing?.api ?? "openai-completions",
+      ...existing,
+      models: [...existingModels, ...toAdd],
     },
   };
 }
@@ -166,7 +219,11 @@ export async function ensureOpenClawModelsJson(
     }
   }
 
-  const augmentedProviders = ensureOpenRouterGemini31CustomToolsModel(mergedProviders);
+  const withOpenRouterFromDefaults = ensureOpenRouterProviderFromAgentDefaults({
+    providers: mergedProviders,
+    cfg,
+  });
+  const augmentedProviders = ensureOpenRouterGemini31CustomToolsModel(withOpenRouterFromDefaults);
   const normalizedProviders = normalizeProviders({
     providers: augmentedProviders,
     agentDir,
