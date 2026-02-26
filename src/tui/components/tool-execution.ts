@@ -1,13 +1,9 @@
 import { Container, Text } from "@mariozechner/pi-tui";
+import { TOOL_BULLETS, type ToolBarBulletStyle } from "../../agents/tool-bullets.js";
 import { resolveToolBarStatus } from "../../agents/tool-display.js";
 import { theme } from "../theme/theme.js";
 
-export type ToolBarBulletStyle = "circles" | "checkboxes";
-
-const BULLETS: Record<ToolBarBulletStyle, { running: string; done: string; error: string }> = {
-  circles: { running: "○ ", done: "● ", error: "● " },
-  checkboxes: { running: "□ ", done: "✓ ", error: "✗ " },
-};
+export type { ToolBarBulletStyle };
 
 export class ToolExecutionComponent extends Container {
   private line: Text;
@@ -54,7 +50,7 @@ export class ToolExecutionComponent extends Container {
       isPartial: this.isPartial,
       isError: this.isError,
     });
-    const bullets = BULLETS[this.bulletStyle];
+    const bullets = TOOL_BULLETS[this.bulletStyle];
     const bulletChar = this.isPartial
       ? bullets.running
       : this.isError

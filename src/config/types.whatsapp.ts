@@ -103,6 +103,10 @@ export type WhatsAppConfig = {
   heartbeat?: ChannelHeartbeatVisibilityConfig;
   /** Show emoji prefix on tool-call summary messages (default: true). */
   toolSummaryEmoji?: boolean;
+  /** Emit a second tool-call summary message when a tool completes (default: false). */
+  toolSummaryEmitDone?: boolean;
+  /** Bullet style for tool-call summary messages: "circles" (○/●) or "checkboxes" (□/✓). Overrides ui.toolBarBulletStyle for WhatsApp. Default: "checkboxes". */
+  toolBarBulletStyle?: "circles" | "checkboxes";
 };
 
 export type WhatsAppAccountConfig = {
@@ -153,4 +157,8 @@ export type WhatsAppAccountConfig = {
   heartbeat?: ChannelHeartbeatVisibilityConfig;
   /** Per-account override for tool-call summary emoji visibility. */
   toolSummaryEmoji?: boolean;
+  /** Per-account override for completion tool-call summary emission. */
+  toolSummaryEmitDone?: boolean;
+  /** Per-account bullet style override for tool-call summary messages. */
+  toolBarBulletStyle?: "circles" | "checkboxes";
 };

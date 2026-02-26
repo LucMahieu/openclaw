@@ -5,6 +5,8 @@ type ToolAggregateOptions = {
   markdown?: boolean;
   monospaceFence?: boolean;
   includeEmoji?: boolean;
+  /** Bullet prefix for status (e.g. "○ ", "□ ", "✓ "). When set, replaces emoji as status indicator. */
+  bulletPrefix?: string;
 };
 
 export function shortenPath(p: string): string {
@@ -26,15 +28,18 @@ export function formatToolAggregate(
   const filtered = (metas ?? []).filter(Boolean).map(shortenMeta);
   const display = resolveToolDisplay({ name: toolName });
   const includeEmoji = options?.includeEmoji !== false;
+  const bulletPrefix = options?.bulletPrefix;
   const hideLabel = shouldHideToolLabel(toolName);
   const labelPrefix = hideLabel ? "" : display.label;
-  const prefix = includeEmoji
+  const emojiPrefix = includeEmoji
     ? hideLabel
       ? display.emoji
       : `${display.emoji} ${display.label}`
     : labelPrefix;
+  const prefix = bulletPrefix ? labelPrefix : emojiPrefix;
   if (!filtered.length) {
-    return prefix || display.label;
+    const base = bulletPrefix ? display.label : prefix || display.label;
+    return bulletPrefix ? `${bulletPrefix}${base}` : base;
   }
 
   const rawSegments: string[] = [];
@@ -76,11 +81,16 @@ export function formatToolAggregate(
   const allSegments = [...rawSegments, ...segments];
   const meta = allSegments.join("; ");
   const formattedMeta = formatMetaForDisplay(toolName, meta, options?.markdown);
-  const rendered = hideLabel
-    ? prefix
-      ? `${prefix} ${formattedMeta}`
-      : formattedMeta
-    : `${prefix}: ${formattedMeta}`;
+  const body = bulletPrefix
+    ? hideLabel
+      ? formattedMeta
+      : `${display.label}: ${formattedMeta}`
+    : hideLabel
+      ? prefix
+        ? `${prefix} ${formattedMeta}`
+        : formattedMeta
+      : `${prefix}: ${formattedMeta}`;
+  const rendered = bulletPrefix ? `${bulletPrefix}${body}` : body;
   return options?.monospaceFence ? wrapMonospaceFence(rendered) : rendered;
 }
 

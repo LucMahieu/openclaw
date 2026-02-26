@@ -399,6 +399,10 @@ export const FIELD_HELP: Record<string, string> = {
   "channels.whatsapp.selfChatMode": "Same-phone setup (bot uses your personal WhatsApp number).",
   "channels.whatsapp.debounceMs":
     "Debounce window (ms) for batching rapid consecutive messages from the same sender (0 to disable).",
+  "channels.whatsapp.toolSummaryEmitDone":
+    "Emit a second tool-call summary message when a tool completes (default: false).",
+  "channels.whatsapp.toolBarBulletStyle":
+    'Bullet style for tool-call summary messages: "circles" (○/●) or "checkboxes" (□/✓). Overrides ui.toolBarBulletStyle for WhatsApp. Default: "checkboxes".',
   "channels.signal.dmPolicy":
     'Direct message access control ("pairing" recommended). "open" requires channels.signal.allowFrom=["*"].',
   "channels.imessage.dmPolicy":

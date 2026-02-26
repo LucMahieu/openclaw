@@ -195,14 +195,24 @@ export async function runEmbeddedPiAgent(
   const resolvedToolResultMonospaceFence =
     params.toolResultMonospaceFence ?? normalizeMessageChannel(channelHint) === "whatsapp";
   const normalizedMessageChannel = normalizeMessageChannel(channelHint);
-  const resolvedToolResultIncludeEmoji =
-    params.toolResultIncludeEmoji ??
-    (normalizedMessageChannel === "whatsapp" && params.config
-      ? (resolveWhatsAppAccount({
+  const whatsappAccount =
+    normalizedMessageChannel === "whatsapp" && params.config
+      ? resolveWhatsAppAccount({
           cfg: params.config,
           accountId: params.agentAccountId,
-        }).toolSummaryEmoji ?? true)
-      : true);
+        })
+      : undefined;
+  const resolvedToolResultIncludeEmoji =
+    params.toolResultIncludeEmoji ??
+    (normalizedMessageChannel === "whatsapp" ? (whatsappAccount?.toolSummaryEmoji ?? true) : true);
+  const resolvedToolResultBulletStyle =
+    params.toolResultBulletStyle ??
+    (normalizedMessageChannel === "whatsapp" ? whatsappAccount?.toolBarBulletStyle : undefined);
+  const resolvedToolResultEmitDone =
+    params.toolResultEmitDone ??
+    (normalizedMessageChannel === "whatsapp"
+      ? (whatsappAccount?.toolSummaryEmitDone ?? false)
+      : false);
   const isProbeSession = params.sessionId?.startsWith("probe-") ?? false;
 
   return enqueueSession(() =>
@@ -536,6 +546,8 @@ export async function runEmbeddedPiAgent(
             toolResultFormat: resolvedToolResultFormat,
             toolResultMonospaceFence: resolvedToolResultMonospaceFence,
             toolResultIncludeEmoji: resolvedToolResultIncludeEmoji,
+            toolResultBulletStyle: resolvedToolResultBulletStyle,
+            toolResultEmitDone: resolvedToolResultEmitDone,
             execOverrides: params.execOverrides,
             bashElevated: params.bashElevated,
             timeoutMs: params.timeoutMs,

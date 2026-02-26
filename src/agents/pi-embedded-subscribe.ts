@@ -18,6 +18,7 @@ import type {
 } from "./pi-embedded-subscribe.handlers.types.js";
 import type { SubscribeEmbeddedPiSessionParams } from "./pi-embedded-subscribe.types.js";
 import { formatReasoningMessage, stripDowngradedToolCallText } from "./pi-embedded-utils.js";
+import { TOOL_BULLETS } from "./tool-bullets.js";
 import { hasNonzeroUsage, normalizeUsage, type UsageLike } from "./usage.js";
 
 const THINKING_TAG_SCAN_RE = /<\s*(\/?)\s*(?:think(?:ing)?|thought|antthinking)\s*>/gi;
@@ -319,14 +320,18 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     }
     return `\`\`\`txt\n${trimmed}\n\`\`\``;
   };
+  const bulletStyle = params.toolResultBulletStyle;
+  const shouldEmitToolDone = params.toolResultEmitDone === true;
   const emitToolSummary = async (toolName?: string, meta?: string) => {
     if (!params.onToolResult || state.unsubscribed) {
       return;
     }
+    const bulletPrefix = bulletStyle ? TOOL_BULLETS[bulletStyle].running : undefined;
     const agg = formatToolAggregate(toolName, meta ? [meta] : undefined, {
       markdown: useMarkdown,
       monospaceFence: params.toolResultMonospaceFence,
-      includeEmoji: params.toolResultIncludeEmoji,
+      includeEmoji: bulletPrefix ? false : params.toolResultIncludeEmoji,
+      bulletPrefix,
     });
     const { text: cleanedText, mediaUrls } = parseReplyDirectives(agg);
     if (!cleanedText && (!mediaUrls || mediaUrls.length === 0)) {
@@ -343,6 +348,38 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       log.debug(
         `tool summary sent: runId=${params.runId} tool=${toolName ?? "unknown"} sentAt=${Date.now()}`,
       );
+    } catch {
+      // ignore tool result delivery failures
+    }
+  };
+  const emitToolDone = async (
+    toolName?: string,
+    meta?: string,
+    status: "done" | "error" = "done",
+  ) => {
+    if (!params.onToolResult || state.unsubscribed || !bulletStyle || !shouldEmitToolDone) {
+      return;
+    }
+    const bullets = TOOL_BULLETS[bulletStyle];
+    const bulletPrefix = status === "error" ? bullets.error : bullets.done;
+    const agg = formatToolAggregate(toolName, meta ? [meta] : undefined, {
+      markdown: useMarkdown,
+      monospaceFence: params.toolResultMonospaceFence,
+      includeEmoji: false,
+      bulletPrefix,
+    });
+    const { text: cleanedText, mediaUrls } = parseReplyDirectives(agg);
+    if (!cleanedText && (!mediaUrls || mediaUrls.length === 0)) {
+      return;
+    }
+    if (state.unsubscribed) {
+      return;
+    }
+    try {
+      await params.onToolResult({
+        text: cleanedText,
+        mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
+      });
     } catch {
       // ignore tool result delivery failures
     }
@@ -641,6 +678,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     shouldEmitToolResult,
     shouldEmitToolOutput,
     emitToolSummary,
+    emitToolDone,
     emitToolOutput,
     stripBlockTags,
     emitBlockChunk,

@@ -92,6 +92,7 @@ export type EmbeddedPiSubscribeContext = {
   shouldEmitToolResult: () => boolean;
   shouldEmitToolOutput: () => boolean;
   emitToolSummary: (toolName?: string, meta?: string) => Promise<void>;
+  emitToolDone: (toolName?: string, meta?: string, status?: "done" | "error") => Promise<void>;
   emitToolOutput: (toolName?: string, meta?: string, output?: string) => Promise<void>;
   stripBlockTags: (
     text: string,
@@ -165,6 +166,7 @@ export type ToolHandlerContext = {
   shouldEmitToolResult: () => boolean;
   shouldEmitToolOutput: () => boolean;
   emitToolSummary: (toolName?: string, meta?: string) => Promise<void>;
+  emitToolDone: (toolName?: string, meta?: string, status?: "done" | "error") => Promise<void>;
   emitToolOutput: (toolName?: string, meta?: string, output?: string) => Promise<void>;
   trimMessagingToolSent: () => void;
   isSubscriptionClosed: () => boolean;

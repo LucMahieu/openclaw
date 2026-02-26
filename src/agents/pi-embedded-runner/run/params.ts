@@ -79,6 +79,10 @@ export type RunEmbeddedPiAgentParams = {
   toolResultMonospaceFence?: boolean;
   /** Include emoji prefixes in tool-summary lines. */
   toolResultIncludeEmoji?: boolean;
+  /** Bullet style for tool-summary lines: "circles" (○/●) or "checkboxes" (□/✓). When set, enables bullet-style status updates. */
+  toolResultBulletStyle?: "circles" | "checkboxes";
+  /** Emit a second tool summary on completion (done/error). */
+  toolResultEmitDone?: boolean;
   /** If true, suppress tool error warning payloads for this run (including mutating tools). */
   suppressToolErrorWarnings?: boolean;
   execOverrides?: Pick<ExecToolDefaults, "host" | "security" | "ask" | "node">;

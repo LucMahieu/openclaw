@@ -64,6 +64,20 @@ function extendExecMeta(toolName: string, args: unknown, meta?: string): string 
   return meta ? `${meta} · ${suffix}` : suffix;
 }
 
+function normalizeSummaryMeta(meta?: string): string | undefined {
+  const trimmed = meta?.trim();
+  if (!trimmed) {
+    return meta;
+  }
+  if (/^\s*run\b/i.test(trimmed)) {
+    return trimmed.replace(/^\s*run\b/i, "Running");
+  }
+  if (/^\s*analyze\b/i.test(trimmed)) {
+    return trimmed.replace(/^\s*analyze\b/i, "Analyzing");
+  }
+  return trimmed;
+}
+
 function pushUniqueMediaUrl(urls: string[], seen: Set<string>, value: unknown): void {
   if (typeof value !== "string") {
     return;
@@ -200,7 +214,7 @@ export async function handleToolExecutionStart(
       args,
       fallbackMeta: meta,
     });
-    const nextMeta = summarizedMeta ?? meta;
+    const nextMeta = normalizeSummaryMeta(summarizedMeta ?? meta);
     const summary = ctx.state.toolMetaById.get(toolCallId);
     if (summary) {
       summary.meta = nextMeta;
@@ -383,6 +397,10 @@ export async function handleToolExecutionEnd(
   ctx.log.debug(
     `embedded run tool end: runId=${ctx.params.runId} tool=${toolName} toolCallId=${toolCallId}`,
   );
+
+  if (ctx.params.onToolResult && ctx.shouldEmitToolResult()) {
+    await ctx.emitToolDone(toolName, meta, isToolError ? "error" : "done");
+  }
 
   if (ctx.params.onToolResult && ctx.shouldEmitToolOutput()) {
     const outputText = extractToolResultText(sanitizedResult);

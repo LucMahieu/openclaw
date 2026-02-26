@@ -763,6 +763,8 @@ export async function runEmbeddedAttempt(
         toolResultFormat: params.toolResultFormat,
         toolResultMonospaceFence: params.toolResultMonospaceFence,
         toolResultIncludeEmoji: params.toolResultIncludeEmoji,
+        toolResultBulletStyle: params.toolResultBulletStyle,
+        toolResultEmitDone: params.toolResultEmitDone,
         shouldEmitToolResult: params.shouldEmitToolResult,
         shouldEmitToolOutput: params.shouldEmitToolOutput,
         onToolResult: params.onToolResult,
