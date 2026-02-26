@@ -2,7 +2,12 @@ import { Container, Text } from "@mariozechner/pi-tui";
 import { resolveToolBarStatus } from "../../agents/tool-display.js";
 import { theme } from "../theme/theme.js";
 
-const BULLET = "• ";
+export type ToolBarBulletStyle = "circles" | "checkboxes";
+
+const BULLETS: Record<ToolBarBulletStyle, { running: string; done: string; error: string }> = {
+  circles: { running: "○ ", done: "● ", error: "● " },
+  checkboxes: { running: "□ ", done: "✓ ", error: "✗ " },
+};
 
 export class ToolExecutionComponent extends Container {
   private line: Text;
@@ -10,11 +15,13 @@ export class ToolExecutionComponent extends Container {
   private args: unknown;
   private isError = false;
   private isPartial = true;
+  private bulletStyle: ToolBarBulletStyle;
 
-  constructor(toolName: string, args: unknown) {
+  constructor(toolName: string, args: unknown, bulletStyle: ToolBarBulletStyle = "checkboxes") {
     super();
     this.toolName = toolName;
     this.args = args;
+    this.bulletStyle = bulletStyle;
     this.line = new Text("", 0, 0);
     this.addChild(this.line);
     this.refresh();
@@ -47,12 +54,18 @@ export class ToolExecutionComponent extends Container {
       isPartial: this.isPartial,
       isError: this.isError,
     });
+    const bullets = BULLETS[this.bulletStyle];
+    const bulletChar = this.isPartial
+      ? bullets.running
+      : this.isError
+        ? bullets.error
+        : bullets.done;
     const bulletFn = this.isPartial
       ? theme.toolBarBulletRunning
       : this.isError
         ? theme.toolBarBulletError
         : theme.toolBarBulletDone;
-    const bullet = bulletFn(BULLET);
+    const bullet = bulletFn(bulletChar);
     const statusText = theme.dim(status);
     this.line.setText(`${bullet}${statusText}`);
   }
