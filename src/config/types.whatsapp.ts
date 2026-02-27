@@ -105,8 +105,18 @@ export type WhatsAppConfig = {
   toolSummaryEmoji?: boolean;
   /** Emit a second tool-call summary message when a tool completes (default: false). */
   toolSummaryEmitDone?: boolean;
-  /** Bullet style for tool-call summary messages: "circles" (○/●) or "checkboxes" (□/✓). Overrides ui.toolBarBulletStyle for WhatsApp. Default: "checkboxes". */
+  /** Bullet style for tool-call summary messages: "circles" (○/●) or "checkboxes" (□/✓). Overrides ui.toolBarBulletStyle for WhatsApp. Default: "circles". */
   toolBarBulletStyle?: "circles" | "checkboxes";
+  /** User-facing summary style profile (default: "executive"). */
+  toolSummaryStyle?: "executive" | "balanced" | "dev";
+  /** Max words in tool summaries (default executive: 6). */
+  toolSummaryMaxWords?: number;
+  /** Dedupe window in ms for repeated tool summaries (default: 20000). */
+  toolSummaryDedupWindowMs?: number;
+  /** Suppress repeated summaries and emit retry labels (default: true). */
+  toolSummarySuppressRepeats?: boolean;
+  /** Remove internal paths/IDs/tool internals from user-facing summaries (default: true). */
+  toolSummaryRedactInternals?: boolean;
 };
 
 export type WhatsAppAccountConfig = {
@@ -161,4 +171,14 @@ export type WhatsAppAccountConfig = {
   toolSummaryEmitDone?: boolean;
   /** Per-account bullet style override for tool-call summary messages. */
   toolBarBulletStyle?: "circles" | "checkboxes";
+  /** Per-account override for summary style profile. */
+  toolSummaryStyle?: "executive" | "balanced" | "dev";
+  /** Per-account override for summary max words. */
+  toolSummaryMaxWords?: number;
+  /** Per-account override for summary dedupe window. */
+  toolSummaryDedupWindowMs?: number;
+  /** Per-account override to suppress repeated summaries. */
+  toolSummarySuppressRepeats?: boolean;
+  /** Per-account override to redact internal technical details. */
+  toolSummaryRedactInternals?: boolean;
 };

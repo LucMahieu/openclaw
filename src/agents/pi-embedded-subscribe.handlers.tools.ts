@@ -208,6 +208,9 @@ export async function handleToolExecutionStart(
         toolCallId,
         args,
         fallbackMeta: meta,
+        summaryStyle: ctx.params.toolSummaryStyle,
+        summaryMaxWords: ctx.params.toolSummaryMaxWords,
+        redactInternals: ctx.params.toolSummaryRedactInternals,
       });
       const nextMeta = normalizeSummaryMeta(summarizedMeta ?? meta);
       const summary = ctx.state.toolMetaById.get(toolCallId);

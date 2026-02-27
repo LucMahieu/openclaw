@@ -212,6 +212,29 @@ export async function runEmbeddedPiAgent(
     (normalizedMessageChannel === "whatsapp"
       ? (whatsappAccount?.toolSummaryEmitDone ?? false)
       : false);
+  const resolvedToolSummaryStyle =
+    params.toolSummaryStyle ??
+    (normalizedMessageChannel === "whatsapp"
+      ? (whatsappAccount?.toolSummaryStyle ?? "executive")
+      : "balanced");
+  const resolvedToolSummaryMaxWords =
+    params.toolSummaryMaxWords ??
+    (normalizedMessageChannel === "whatsapp" ? (whatsappAccount?.toolSummaryMaxWords ?? 6) : 9);
+  const resolvedToolSummaryDedupWindowMs =
+    params.toolSummaryDedupWindowMs ??
+    (normalizedMessageChannel === "whatsapp"
+      ? (whatsappAccount?.toolSummaryDedupWindowMs ?? 20_000)
+      : 0);
+  const resolvedToolSummarySuppressRepeats =
+    params.toolSummarySuppressRepeats ??
+    (normalizedMessageChannel === "whatsapp"
+      ? (whatsappAccount?.toolSummarySuppressRepeats ?? true)
+      : false);
+  const resolvedToolSummaryRedactInternals =
+    params.toolSummaryRedactInternals ??
+    (normalizedMessageChannel === "whatsapp"
+      ? (whatsappAccount?.toolSummaryRedactInternals ?? true)
+      : false);
   const isProbeSession = params.sessionId?.startsWith("probe-") ?? false;
 
   return enqueueSession(() =>
@@ -547,6 +570,11 @@ export async function runEmbeddedPiAgent(
             toolResultIncludeEmoji: resolvedToolResultIncludeEmoji,
             toolResultBulletStyle: resolvedToolResultBulletStyle,
             toolResultEmitDone: resolvedToolResultEmitDone,
+            toolSummaryStyle: resolvedToolSummaryStyle,
+            toolSummaryMaxWords: resolvedToolSummaryMaxWords,
+            toolSummaryDedupWindowMs: resolvedToolSummaryDedupWindowMs,
+            toolSummarySuppressRepeats: resolvedToolSummarySuppressRepeats,
+            toolSummaryRedactInternals: resolvedToolSummaryRedactInternals,
             execOverrides: params.execOverrides,
             bashElevated: params.bashElevated,
             timeoutMs: params.timeoutMs,

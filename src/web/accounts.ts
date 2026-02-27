@@ -31,6 +31,11 @@ export type ResolvedWhatsAppAccount = {
   toolSummaryEmoji?: boolean;
   toolSummaryEmitDone?: boolean;
   toolBarBulletStyle?: "circles" | "checkboxes";
+  toolSummaryStyle?: "executive" | "balanced" | "dev";
+  toolSummaryMaxWords?: number;
+  toolSummaryDedupWindowMs?: number;
+  toolSummarySuppressRepeats?: boolean;
+  toolSummaryRedactInternals?: boolean;
 };
 
 const { listConfiguredAccountIds, listAccountIds, resolveDefaultAccountId } =
@@ -153,6 +158,14 @@ export function resolveWhatsAppAccount(params: {
     debounceMs: accountCfg?.debounceMs ?? rootCfg?.debounceMs,
     toolSummaryEmoji: accountCfg?.toolSummaryEmoji ?? rootCfg?.toolSummaryEmoji ?? true,
     toolSummaryEmitDone: accountCfg?.toolSummaryEmitDone ?? rootCfg?.toolSummaryEmitDone ?? false,
+    toolSummaryStyle: accountCfg?.toolSummaryStyle ?? rootCfg?.toolSummaryStyle ?? "executive",
+    toolSummaryMaxWords: accountCfg?.toolSummaryMaxWords ?? rootCfg?.toolSummaryMaxWords ?? 6,
+    toolSummaryDedupWindowMs:
+      accountCfg?.toolSummaryDedupWindowMs ?? rootCfg?.toolSummaryDedupWindowMs ?? 20_000,
+    toolSummarySuppressRepeats:
+      accountCfg?.toolSummarySuppressRepeats ?? rootCfg?.toolSummarySuppressRepeats ?? true,
+    toolSummaryRedactInternals:
+      accountCfg?.toolSummaryRedactInternals ?? rootCfg?.toolSummaryRedactInternals ?? true,
     toolBarBulletStyle:
       accountCfg?.toolBarBulletStyle ??
       rootCfg?.toolBarBulletStyle ??

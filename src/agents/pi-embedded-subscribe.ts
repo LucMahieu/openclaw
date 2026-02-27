@@ -324,6 +324,40 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
   };
   const bulletStyle = params.toolResultBulletStyle;
   const shouldEmitToolDone = params.toolResultEmitDone === true;
+  const summaryStyle = params.toolSummaryStyle ?? "balanced";
+  const suppressRepeats = params.toolSummarySuppressRepeats === true;
+  const dedupWindowMs = Math.max(0, params.toolSummaryDedupWindowMs ?? 0);
+  let lastSummaryText = "";
+  let lastSummaryAt = 0;
+  let repeatedSummaryCount = 0;
+  let emittedRetryForCurrentSummary = false;
+  const resolveDedupedSummaryText = (text: string): string | undefined => {
+    if (!suppressRepeats || dedupWindowMs <= 0) {
+      return text;
+    }
+    const normalized = text.trim().toLowerCase();
+    if (!normalized) {
+      return undefined;
+    }
+    const now = Date.now();
+    if (normalized !== lastSummaryText || now - lastSummaryAt > dedupWindowMs) {
+      lastSummaryText = normalized;
+      lastSummaryAt = now;
+      repeatedSummaryCount = 0;
+      emittedRetryForCurrentSummary = false;
+      return text;
+    }
+    repeatedSummaryCount += 1;
+    lastSummaryAt = now;
+    if (!emittedRetryForCurrentSummary) {
+      emittedRetryForCurrentSummary = true;
+      return summaryStyle === "executive" ? "Opnieuw geprobeerd" : text;
+    }
+    if (repeatedSummaryCount >= 2) {
+      return undefined;
+    }
+    return text;
+  };
   const emitToolSummary = async (toolName?: string, meta?: string, toolCallId?: string) => {
     if (!params.onToolResult || state.unsubscribed) {
       return;
@@ -336,7 +370,8 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       bulletPrefix,
     });
     const { text: cleanedText, mediaUrls } = parseReplyDirectives(agg);
-    if (!cleanedText && (!mediaUrls || mediaUrls.length === 0)) {
+    const dedupedText = cleanedText ? resolveDedupedSummaryText(cleanedText) : cleanedText;
+    if (!dedupedText && (!mediaUrls || mediaUrls.length === 0)) {
       return;
     }
     if (state.unsubscribed) {
@@ -345,7 +380,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     try {
       const send = async () => {
         await params.onToolResult?.({
-          text: cleanedText,
+          text: dedupedText,
           mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
         });
       };

@@ -57,6 +57,11 @@ const WhatsAppSharedSchema = z.object({
   toolSummaryEmoji: z.boolean().optional(),
   toolSummaryEmitDone: z.boolean().optional(),
   toolBarBulletStyle: z.enum(["circles", "checkboxes"]).optional(),
+  toolSummaryStyle: z.enum(["executive", "balanced", "dev"]).optional(),
+  toolSummaryMaxWords: z.number().int().min(2).max(20).optional(),
+  toolSummaryDedupWindowMs: z.number().int().nonnegative().optional(),
+  toolSummarySuppressRepeats: z.boolean().optional(),
+  toolSummaryRedactInternals: z.boolean().optional(),
 });
 
 function enforceOpenDmPolicyAllowFromStar(params: {

@@ -402,7 +402,16 @@ export const FIELD_HELP: Record<string, string> = {
   "channels.whatsapp.toolSummaryEmitDone":
     "Emit a second tool-call summary message when a tool completes (default: false).",
   "channels.whatsapp.toolBarBulletStyle":
-    'Bullet style for tool-call summary messages: "circles" (○/●) or "checkboxes" (□/✓). Overrides ui.toolBarBulletStyle for WhatsApp. Default: "checkboxes".',
+    'Bullet style for tool-call summary messages: "circles" (○/●) or "checkboxes" (□/✓). Overrides ui.toolBarBulletStyle for WhatsApp. Default: "circles".',
+  "channels.whatsapp.toolSummaryStyle":
+    'Summary style profile: "executive" (ultra-short), "balanced", or "dev". Default: "executive".',
+  "channels.whatsapp.toolSummaryMaxWords": "Max words per tool summary (default executive: 6).",
+  "channels.whatsapp.toolSummaryDedupWindowMs":
+    "Suppress-repeat window in ms for similar tool summaries (default: 20000).",
+  "channels.whatsapp.toolSummarySuppressRepeats":
+    "If true, collapse repeated tool summaries and emit retry wording once (default: true).",
+  "channels.whatsapp.toolSummaryRedactInternals":
+    "If true, redact internal paths/IDs/tool internals from tool summaries (default: true).",
   "channels.signal.dmPolicy":
     'Direct message access control ("pairing" recommended). "open" requires channels.signal.allowFrom=["*"].',
   "channels.imessage.dmPolicy":

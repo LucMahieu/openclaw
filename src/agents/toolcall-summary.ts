@@ -13,6 +13,8 @@ const DEFAULT_RETRY_BACKOFF_MS = [200, 700];
 const DEFAULT_MAX_TOKENS_PLAN = [220, 420, 520, 620, 720];
 const MAX_RESPONSE_CHARS = 180;
 const CACHE_MAX_ENTRIES = 200;
+const DEFAULT_SUMMARY_STYLE = "balanced";
+const DEFAULT_EXECUTIVE_MAX_WORDS = 6;
 const log = createSubsystemLogger("agent/toolcall-summary");
 
 type ToolCallSummaryInput = {
@@ -21,7 +23,11 @@ type ToolCallSummaryInput = {
   toolCallId: string;
   args: unknown;
   fallbackMeta?: string;
+  summaryStyle?: "executive" | "balanced" | "dev";
+  summaryMaxWords?: number;
+  redactInternals?: boolean;
 };
+type SummaryStyle = "executive" | "balanced" | "dev";
 
 type OpenRouterChatCompletionResponse = {
   choices?: Array<{
@@ -79,6 +85,22 @@ const LEAD_REWRITE_MAP: Array<[RegExp, string]> = [
 
 function normalizeKey(value: string | undefined): string {
   return (value ?? "").trim();
+}
+
+function resolveSummaryStyle(input?: string): SummaryStyle {
+  const normalized = (input ?? "").trim().toLowerCase();
+  if (normalized === "executive" || normalized === "balanced" || normalized === "dev") {
+    return normalized;
+  }
+  return DEFAULT_SUMMARY_STYLE;
+}
+
+function resolveSummaryMaxWords(input: number | undefined, style: SummaryStyle): number {
+  const fallback = style === "executive" ? DEFAULT_EXECUTIVE_MAX_WORDS : 12;
+  if (!Number.isFinite(input) || !input) {
+    return fallback;
+  }
+  return Math.max(2, Math.min(20, Math.floor(input)));
 }
 
 function resolveApiKey(): string | undefined {
@@ -215,7 +237,30 @@ function sanitizeSummary(value: string | undefined): string | undefined {
   return `${trimmed.slice(0, MAX_RESPONSE_CHARS - 1).trimEnd()}…`;
 }
 
-export function normalizeToolSummaryForDisplay(value: string): string {
+function truncateWords(value: string, maxWords: number): string {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) {
+    return words.join(" ");
+  }
+  return words.slice(0, maxWords).join(" ");
+}
+
+function redactInternalDetail(value: string): string {
+  return value
+    .replace(/~?\/[\w./-]+/g, "")
+    .replace(/\b[0-9a-f]{8,}\b/gi, "")
+    .replace(/\b(?:session|sessie)\s+[A-Za-z0-9_-]+\b/gi, "sessie")
+    .replace(/\b[A-Za-z0-9_-]*\.md\b/gi, "")
+    .replace(/\b[A-Za-z0-9_-]*\.py\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function normalizeToolSummaryForDisplay(
+  value: string,
+  options?: { style?: SummaryStyle },
+): string {
+  const style = resolveSummaryStyle(options?.style);
   let out = value.replace(/\s+/g, " ").trim();
   if (!out) {
     return out;
@@ -238,7 +283,11 @@ export function normalizeToolSummaryForDisplay(value: string): string {
     }
   }
 
-  if (/^[a-z0-9][a-z0-9 _-]{2,}$/i.test(out) && !/(ge|ver|be|ont)\w+/i.test(out)) {
+  if (
+    style !== "executive" &&
+    /^[a-z0-9][a-z0-9 _-]{2,}$/i.test(out) &&
+    !/(ge|ver|be|ont)\w+/i.test(out)
+  ) {
     out = `Bijgewerkt: ${out}`;
   }
 
@@ -461,7 +510,89 @@ function extractImagePathFromArgs(args: unknown): string | undefined {
   return undefined;
 }
 
-function resolveFallbackSummary(input: ToolCallSummaryInput): string | undefined {
+function resolveExecutiveLabel(input: ToolCallSummaryInput): string {
+  const toolName = normalizeKey(input.toolName).toLowerCase();
+  const action = extractStringArg(input.args, "action")?.toLowerCase();
+  if (toolName === "sessions_spawn") {
+    return "Codex gestart";
+  }
+  if (toolName === "session_status" || toolName === "process") {
+    return "Status gecontroleerd";
+  }
+  if (toolName === "cron") {
+    if (action === "add" || action === "update" || action === "run") {
+      return "Controle ingepland";
+    }
+    if (action === "remove") {
+      return "Controle aangepast";
+    }
+    return "Planning gecontroleerd";
+  }
+  if (toolName === "read") {
+    return "Code bekeken";
+  }
+  if (toolName === "web_search" || toolName === "memory_search") {
+    return "Informatie bekeken";
+  }
+  if (toolName === "image" || toolName === "browser") {
+    return "Scherm gecontroleerd";
+  }
+  if (toolName === "exec" || toolName === "bash") {
+    const command =
+      extractStringArg(input.args, "command") ??
+      extractStringArg(input.args, "cmd") ??
+      extractStringArg(input.args, "script") ??
+      "";
+    const lower = command.toLowerCase();
+    if (/(screenshot|scrot|grim|import -window|capture|png)/i.test(lower)) {
+      return "Scherm gecontroleerd";
+    }
+    if (/(status|health|uptime|df|free|top|ps)/i.test(lower)) {
+      return "Status gecontroleerd";
+    }
+    if (/(grep|rg|find|search|head|tail|cat|sed)/i.test(lower)) {
+      return "Informatie bekeken";
+    }
+    return "Actie uitgevoerd";
+  }
+  return "Resultaat gecontroleerd";
+}
+
+function applySummaryPolicy(params: {
+  input: ToolCallSummaryInput;
+  summary: string;
+  style: SummaryStyle;
+  maxWords: number;
+  redactInternals: boolean;
+}): string {
+  const { input, style, maxWords, redactInternals } = params;
+  let out = params.summary.trim();
+  if (redactInternals) {
+    out = redactInternalDetail(out);
+  }
+  if (style === "executive") {
+    out = resolveExecutiveLabel({ ...input, fallbackMeta: out || input.fallbackMeta });
+  }
+  out = normalizeToolSummaryForDisplay(out, { style });
+  out = truncateWords(out, maxWords);
+  return out.replace(/[.!?…]+$/g, "").trim();
+}
+
+function resolveFallbackSummary(
+  input: ToolCallSummaryInput,
+  style: SummaryStyle,
+  maxWords: number,
+  redactInternals: boolean,
+): string | undefined {
+  if (style === "executive") {
+    return applySummaryPolicy({
+      input,
+      summary: resolveExecutiveLabel(input),
+      style,
+      maxWords,
+      redactInternals,
+    });
+  }
   const toolName = normalizeKey(input.toolName).toLowerCase();
   if (toolName === "process") {
     return resolveProcessFallbackSummary(input);
@@ -481,24 +612,48 @@ function resolveFallbackSummary(input: ToolCallSummaryInput): string | undefined
 
   const explicit = sanitizeSummary(input.fallbackMeta);
   if (explicit) {
-    return sanitizeSummary(normalizeToolSummaryForDisplay(explicit));
+    return applySummaryPolicy({
+      input,
+      summary: sanitizeSummary(normalizeToolSummaryForDisplay(explicit)) ?? "",
+      style,
+      maxWords,
+      redactInternals,
+    });
   }
 
   if (toolName === "image") {
-    return "Screenshot verwerkt";
+    return applySummaryPolicy({
+      input,
+      summary: "Screenshot verwerkt",
+      style,
+      maxWords,
+      redactInternals,
+    });
   }
 
   if (toolName === "browser") {
     const action = extractStringArg(input.args, "action")?.toLowerCase();
     if (action === "screenshot" || action === "snapshot") {
-      return "Screenshot gemaakt";
+      return applySummaryPolicy({
+        input,
+        summary: "Screenshot gemaakt",
+        style,
+        maxWords,
+        redactInternals,
+      });
     }
   }
 
   if (toolName === "read") {
     const imagePath = extractImagePathFromArgs(input.args);
     if (imagePath) {
-      return "Screenshot geanalyseerd";
+      return applySummaryPolicy({
+        input,
+        summary: "Screenshot geanalyseerd",
+        style,
+        maxWords,
+        redactInternals,
+      });
     }
   }
 
@@ -583,7 +738,10 @@ function setCache(cacheKey: string, value: string): void {
 export async function summarizeToolCallForUser(
   input: ToolCallSummaryInput,
 ): Promise<string | undefined> {
-  const fallbackSummary = resolveFallbackSummary(input);
+  const style = resolveSummaryStyle(input.summaryStyle);
+  const maxWords = resolveSummaryMaxWords(input.summaryMaxWords, style);
+  const redactInternals = input.redactInternals !== false;
+  const fallbackSummary = resolveFallbackSummary(input, style, maxWords, redactInternals);
 
   if (!resolveEnabled()) {
     return fallbackSummary;
@@ -596,7 +754,9 @@ export async function summarizeToolCallForUser(
 
   const toolName = normalizeKey(input.toolName);
   const toolCallId = normalizeKey(input.toolCallId);
-  const cacheKey = `${toolName}|${stableStringify(input.args)}|${normalizeKey(input.fallbackMeta)}`;
+  const cacheKey = `${toolName}|${stableStringify(input.args)}|${normalizeKey(
+    input.fallbackMeta,
+  )}|${style}|${maxWords}|${redactInternals ? "redact" : "raw"}`;
   const cached = summaryCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -622,7 +782,9 @@ export async function summarizeToolCallForUser(
           {
             role: "system",
             content:
-              "Je vat tool-calls samen voor chatgebruikers. Geef exact één korte zin (6-14 woorden), in het Nederlands, in de verleden tijd, met sentence case. Begin altijd met een statusprefix in voltooid-deelwoordstijl, bijvoorbeeld: 'Gezocht naar ...', 'Gelezen uit ...', 'Uitgevoerd: ...', 'Cronjob ...', 'Screenshot ...'. Gebruik nooit eerste persoon (geen 'ik'). Wees concreet: noem actie en object/resultaat. Vermijd vage labels zoals 'startup validatie deadline'. Geen markdown, geen bullets, geen IDs.",
+              style === "executive"
+                ? "Je vat tool-calls samen voor niet-technische chatgebruikers. Geef exact één ultra-korte Nederlandse statusregel van 2-6 woorden, in verleden tijd, sentence case, zonder punt. Nooit 'ik'. Nooit paden, IDs, sessienamen, bestandsnamen, toolnamen of jargon. Doel: simpele mensentaal."
+                : "Je vat tool-calls samen voor chatgebruikers. Geef exact één korte zin (6-14 woorden), in het Nederlands, in de verleden tijd, met sentence case. Begin altijd met een statusprefix in voltooid-deelwoordstijl, bijvoorbeeld: 'Gezocht naar ...', 'Gelezen uit ...', 'Uitgevoerd: ...', 'Cronjob ...', 'Screenshot ...'. Gebruik nooit eerste persoon (geen 'ik'). Wees concreet: noem actie en object/resultaat. Vermijd vage labels zoals 'startup validatie deadline'. Geen markdown, geen bullets, geen IDs.",
           },
           {
             role: "user",
@@ -636,6 +798,9 @@ export async function summarizeToolCallForUser(
                   dutch_only: true,
                   past_tense: true,
                   sentence_case: true,
+                  summary_style: style,
+                  max_words: maxWords,
+                  no_internal_details: redactInternals,
                 },
                 toolCall: {
                   runId: input.runId,
@@ -670,7 +835,14 @@ export async function summarizeToolCallForUser(
       const raw = (await res.json()) as OpenRouterChatCompletionResponse;
       const content = extractContentText(raw.choices?.[0]?.message?.content);
       const finishReason = raw.choices?.[0]?.finish_reason;
-      const summary = sanitizeSummary(normalizeToolSummaryForDisplay(content));
+      const normalized = applySummaryPolicy({
+        input,
+        summary: content,
+        style,
+        maxWords,
+        redactInternals,
+      });
+      const summary = sanitizeSummary(normalized);
       return { ok: true, summary, finishReason, reason: summary ? undefined : "empty" };
     } finally {
       clearTimeout(timer);
@@ -703,7 +875,13 @@ export async function summarizeToolCallForUser(
       );
       if (attempt.summary) {
         const fallbackNormalized = sanitizeSummary(
-          normalizeToolSummaryForDisplay(fallbackSummary ?? ""),
+          applySummaryPolicy({
+            input,
+            summary: fallbackSummary ?? "",
+            style,
+            maxWords,
+            redactInternals,
+          }),
         );
         const resolvedSummary =
           (!isStyleCompliantSummary(attempt.summary) || isLowSignalSummary(attempt.summary)) &&

@@ -486,4 +486,44 @@ describe("summarizeToolCallForUser", () => {
     expect(summary).toBe("Uitgevoerd: bad request probe");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("uses executive mode with short non-technical labels", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    const summary = await summarizeToolCallForUser({
+      toolName: "read",
+      toolCallId: "exec-short-1",
+      args: { path: "/tmp/audit/SKILL.md" },
+      summaryStyle: "executive",
+      summaryMaxWords: 6,
+      redactInternals: true,
+    });
+    expect(summary).toBe("Code bekeken");
+  });
+
+  it("uses executive mode fallback when model output is too technical", async () => {
+    vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: { content: "Gelezen uit /tmp/tmp.ragh6aVlRM/source/SKILL.md" },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const summary = await summarizeToolCallForUser({
+      toolName: "read",
+      toolCallId: "exec-short-2",
+      args: { path: "/tmp/tmp.ragh6aVlRM/source/SKILL.md" },
+      summaryStyle: "executive",
+      summaryMaxWords: 6,
+      redactInternals: true,
+    });
+
+    expect(summary).toBe("Code bekeken");
+  });
 });

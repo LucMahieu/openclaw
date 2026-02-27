@@ -20,6 +20,11 @@ export type SubscribeEmbeddedPiSessionParams = {
   toolResultBulletStyle?: ToolBarBulletStyle;
   /** Emit a second tool summary on completion (done/error). */
   toolResultEmitDone?: boolean;
+  toolSummaryStyle?: "executive" | "balanced" | "dev";
+  toolSummaryMaxWords?: number;
+  toolSummaryDedupWindowMs?: number;
+  toolSummarySuppressRepeats?: boolean;
+  toolSummaryRedactInternals?: boolean;
   shouldEmitToolResult?: () => boolean;
   shouldEmitToolOutput?: () => boolean;
   onToolResult?: (payload: { text?: string; mediaUrls?: string[] }) => void | Promise<void>;

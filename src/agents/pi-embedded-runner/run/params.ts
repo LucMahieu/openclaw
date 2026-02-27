@@ -83,6 +83,16 @@ export type RunEmbeddedPiAgentParams = {
   toolResultBulletStyle?: "circles" | "checkboxes";
   /** Emit a second tool summary on completion (done/error). */
   toolResultEmitDone?: boolean;
+  /** User-facing summary style profile. */
+  toolSummaryStyle?: "executive" | "balanced" | "dev";
+  /** Max words per tool summary. */
+  toolSummaryMaxWords?: number;
+  /** Dedupe window for repeated tool summaries (ms). */
+  toolSummaryDedupWindowMs?: number;
+  /** Suppress repeated summaries and collapse retries. */
+  toolSummarySuppressRepeats?: boolean;
+  /** Redact technical internals from summaries. */
+  toolSummaryRedactInternals?: boolean;
   /** If true, suppress tool error warning payloads for this run (including mutating tools). */
   suppressToolErrorWarnings?: boolean;
   execOverrides?: Pick<ExecToolDefaults, "host" | "security" | "ask" | "node">;
